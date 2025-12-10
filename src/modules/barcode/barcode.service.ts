@@ -1443,7 +1443,7 @@ class Service {
         );
       } // End of group loop
 
-      // ✅ [3. NEW CODE START] ফাইনাল মানি অ্যাডজাস্টমেন্ট (সেভ করার আগে)
+      // ✅ [3. NEW CODE START]
       if (totalRefundValue > 0) {
         // backup previous total amount only if it's positive or undefined
         if (!order.total_amount || order.total_amount > 0) {
@@ -1453,7 +1453,7 @@ class Service {
         // return amount update
         order.return_amount = (order.return_amount || 0) + totalRefundValue;
 
-        // গ. Reduce Total Amount
+        // Reduce Total Amount
         order.total_amount = Math.max(
           0,
           (order.total_amount || 0) - totalRefundValue
