@@ -885,6 +885,25 @@ class Service {
         throw new ApiError(404, `Order with ID ${orderId} does not exist`);
       }
 
+      const restrictedStatuses = [
+        ORDER_STATUS.DELIVERED,
+        ORDER_STATUS.CANCELLED,
+        ORDER_STATUS.RETURNED,
+        ORDER_STATUS.PENDING_RETURN,
+        ORDER_STATUS.PARTIAL,
+        ORDER_STATUS.RTS,
+        ORDER_STATUS.HANDED_OVER_TO_COURIER,
+        ORDER_STATUS.IN_TRANSIT,
+        ORDER_STATUS.PENDING,
+      ];
+
+      if (restrictedStatuses.includes(order.order_status as ORDER_STATUS)) {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          `Cannot edit order with status ${order.order_status}`
+        );
+      }
+
       const enrichedOrder = await this.enrichProducts(payload);
 
       if (!enrichedOrder?.products || enrichedOrder.products.length <= 0) {
