@@ -590,6 +590,7 @@ class Service {
       }
 
       const payload: IOrder = {
+        user: data.user_id as Types.ObjectId,
         customer_name: prevOrder.customer_name,
         customer_number: prevOrder.customer_number,
         customer_secondary_number: prevOrder.customer_secondary_number,
