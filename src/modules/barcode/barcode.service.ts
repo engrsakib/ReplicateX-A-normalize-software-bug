@@ -1182,7 +1182,7 @@ class Service {
         // G. Update Global Stock (reduce qty_reserved)
         await GlobalStockModel.findOneAndUpdate(
           { product: group.product, variant: group.variant },
-          { $inc: { qty_reserved: -qty, available_quantity: -qty } },
+          { $inc: { available_quantity: -qty } },
           { session, new: true }
         );
       }
