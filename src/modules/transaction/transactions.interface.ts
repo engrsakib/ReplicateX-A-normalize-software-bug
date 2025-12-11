@@ -23,7 +23,7 @@ export type ITransaction = {
 export interface Payload {
   paymentID?: string | ParsedQs | (string | ParsedQs)[] | undefined;
   status?: string | ParsedQs | (string | ParsedQs)[] | undefined;
-  order_id: string | ParsedQs | (string | ParsedQs)[] | undefined;
+  order_id: number | ParsedQs | (string | ParsedQs)[] | undefined;
 }
 
 export type TransactionModel = Model<ITransaction, Record<string, unknown>>;

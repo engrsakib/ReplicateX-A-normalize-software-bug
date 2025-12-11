@@ -109,7 +109,8 @@ class Service {
         await this.calculateCart(enrichedOrder);
 
       // 3. Generate invoice and order id
-      const order_id = await this.generateOrderId(session);
+      const generatedNum = await this.generateOrderId(session);
+      const order_id = `PRE-${generatedNum}`;
       const invoice_number = await InvoiceService.generateInvoiceNumber(
         order_id,
         session
@@ -395,7 +396,8 @@ class Service {
         await this.calculateCart(enrichedOrder);
 
       // 3. Generate invoice and order id
-      const order_id = await this.generateOrderId(session);
+      const generatedNum = await this.generateOrderId(session);
+      const order_id = `PRE-${generatedNum}`;
       const invoice_number = await InvoiceService.generateInvoiceNumber(
         order_id,
         session
@@ -586,7 +588,8 @@ class Service {
         await this.calculateCart(enrichedOrder);
 
       // 3. Generate invoice and order id
-      const order_id = await this.generateOrderId(session);
+      const generatedNum = await this.generateOrderId(session);
+      const order_id = `PRE-${generatedNum}`;
       const invoice_number = await InvoiceService.generateInvoiceNumber(
         order_id,
         session
@@ -613,6 +616,7 @@ class Service {
       }
 
       const payload: IOrder = {
+        user: data.user_id as Types.ObjectId,
         customer_name: prevOrder.customer_name,
         customer_number: prevOrder.customer_number,
         customer_secondary_number: prevOrder.customer_secondary_number,
@@ -2254,7 +2258,7 @@ class Service {
   }
 
   async updateOrderStatus(
-    order_id: string,
+    order_id: string | number,
     user_id: string,
     status: ORDER_STATUS
   ): Promise<IOrder | null> {
@@ -2385,11 +2389,11 @@ class Service {
     status: ORDER_STATUS;
     concurrency?: number;
   }): Promise<{
-    updated: { order_id?: number; _id: string; order_status: ORDER_STATUS }[];
+    updated: { order_id?: string; _id: string; order_status: ORDER_STATUS }[];
     failed: {
       orderId: string;
       error: string;
-      order?: { order_id?: number; _id?: string; order_status?: ORDER_STATUS };
+      order?: { order_id?: string; _id?: string; order_status?: ORDER_STATUS };
     }[];
   }> {
     const { ids, status, userId, concurrency = 10 } = params;
@@ -2537,21 +2541,21 @@ class Service {
     const results = await Promise.all(tasks);
 
     const updated: {
-      order_id?: number;
+      order_id?: string;
       _id: string;
       order_status: ORDER_STATUS;
     }[] = [];
     const failed: {
       orderId: string;
       error: string;
-      order?: { order_id?: number; _id?: string; order_status?: ORDER_STATUS };
+      order?: { order_id?: string; _id?: string; order_status?: ORDER_STATUS };
     }[] = [];
 
     for (const r of results) {
       if (r.ok)
         updated.push(
           r.order as {
-            order_id?: number;
+            order_id?: string;
             _id: string;
             order_status: ORDER_STATUS;
           }
@@ -2562,7 +2566,7 @@ class Service {
     return { updated, failed };
   }
 
-  async order_tracking(order_id: string) {
+  async order_tracking(order_id: number | string): Promise<any> {
     const order = await OrderModel.findOne({ order_id })
       .populate({
         path: "items.product",

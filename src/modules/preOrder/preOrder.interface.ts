@@ -91,7 +91,7 @@ export type IOrder = {
   order_status?: IPreOrderStatus;
   transfer_to_courier?: boolean;
   courier?: Types.ObjectId;
-  order_id?: number;
+  order_id?: string;
   invoice_number: string;
   delivery_address: IAddress;
   payment_type: "bkash" | "cod";

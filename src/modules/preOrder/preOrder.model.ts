@@ -87,7 +87,7 @@ const orderSchema = new Schema<IOrder>(
     },
     is_delivery_charge_paid: { type: Boolean, default: false },
 
-    order_id: { type: Number, required: true },
+    order_id: { type: String, required: true },
     invoice_number: { type: String, required: true },
 
     delivery_address: addressSchema,
