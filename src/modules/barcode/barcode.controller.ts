@@ -408,6 +408,46 @@ class Controller extends BaseController {
       });
     }
   );
+
+  checkIsBarcodeExistsAndReadyForUseForPreOrder = this.catchAsync(
+    async (req: Request, res: Response) => {
+      const { order_id } = req.params;
+      const { barcode, check_for } = req.query;
+
+      // 1. Validation
+      if (!order_id) {
+        throw new ApiError(HttpStatusCode.BAD_REQUEST, "Order ID is required");
+      }
+      if (!barcode || typeof barcode !== "string") {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "Barcode is required and must be a string"
+        );
+      }
+      if (!check_for || typeof check_for !== "string") {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "check_for is required and must be a string"
+        );
+      }
+
+      // 2. Call Service
+      const result =
+        await UniqueBarcodeService.checkIsBarcodeExistsAndReadyForUseForPreOrder(
+          order_id,
+          barcode,
+          check_for
+        );
+
+      // 3. Send Response
+      this.sendResponse(res, {
+        statusCode: HttpStatusCode.OK,
+        success: true,
+        message: "Barcode is valid and ready for use",
+        data: result,
+      });
+    }
+  );
 }
 
 export const UniqueBarcodeController = new Controller();

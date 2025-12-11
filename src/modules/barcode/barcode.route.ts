@@ -56,6 +56,13 @@ router.get(
   UniqueBarcodeController.checkIsBarcodeExistsAndReadyForUse
 );
 
+router.get(
+  "/:order_id/check-barcode-exists/pre-order",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.hasPermissions(PermissionEnum.BARCODE_VIEW),
+  UniqueBarcodeController.checkIsBarcodeExistsAndReadyForUseForPreOrder
+);
+
 router.post(
   "/:order_id/process-order-barcodes",
   JwtInstance.authenticate(Object.values(ROLES)),

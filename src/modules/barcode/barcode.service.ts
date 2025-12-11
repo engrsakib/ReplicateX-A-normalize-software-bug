@@ -416,6 +416,109 @@ class Service {
     };
   }
 
+  async checkIsBarcodeExistsAndReadyForUseForPreOrder(
+    orderId: number | string,
+    barcode: string,
+    check_for: string
+  ): Promise<{
+    is_used_barcode: boolean;
+    status: productBarcodeStatus;
+    conditions: productBarcodeCondition;
+    barcode: string;
+    sku: string;
+  }> {
+    if (!barcode || typeof barcode !== "string") {
+      throw new ApiError(HttpStatusCode.BAD_REQUEST, "barcode is required");
+    }
+
+    const barcodeDoc = await BarcodeModel.findOne({ barcode })
+      .populate("variant")
+      .lean()
+      .exec();
+
+    if (!barcodeDoc) {
+      throw new ApiError(HttpStatusCode.NOT_FOUND, "Barcode not found");
+    }
+
+    if (
+      check_for === checkFor.ASSIGEN &&
+      barcodeDoc.status !== productBarcodeStatus.IN_STOCK
+    ) {
+      throw new ApiError(
+        HttpStatusCode.BAD_REQUEST,
+        `Barcode status is already ${barcodeDoc.status},`
+      );
+    }
+
+    // console.log(check_for, "check for");
+
+    if (
+      check_for === checkFor.RETURNED &&
+      barcodeDoc.status !== productBarcodeStatus.ASSIGNED
+    ) {
+      throw new ApiError(
+        HttpStatusCode.BAD_REQUEST,
+        `Barcode status is ${barcodeDoc.status}, only assigned barcode can be returned.`
+      );
+    }
+
+    const order = await PreOrderModel.findOne({ order_id: orderId })
+      .populate({
+        path: "items.variant",
+        select: "sku",
+      })
+      .lean()
+      .exec();
+
+    if (!order) {
+      throw new ApiError(HttpStatusCode.NOT_FOUND, "Order not found");
+    }
+
+    const targetSku = (barcodeDoc as IBarcode)?.sku;
+    // console.log(targetSku,"sku data from barcode");
+    const targetProductId = String(barcodeDoc.product);
+
+    const matchesOrderItem = (order.items || []).some((item: any) => {
+      const isProductMatch = String(item.product) === targetProductId;
+
+      const itemSku = item.variant?.sku;
+      // console.log(itemSku, "sku data from order item");
+      const isSkuMatch = itemSku === targetSku;
+
+      // console.log(isSkuMatch,"sku match")
+
+      // গ. কোয়ান্টিটি চেক (আর কতগুলো বাকি আছে)
+      // const alreadyAssigned = Array.isArray(item.barcode)
+      //   ? item.barcode.length
+      //   : 0;
+      // const needsMore =
+      //   typeof item.quantity === "number"
+      //     ? alreadyAssigned < item.quantity
+      //     : true;
+
+      // console.log(isProductMatch,  isSkuMatch, needsMore, "final match result");
+
+      // সব শর্ত সত্য হতে হবে
+      return isProductMatch && isSkuMatch;
+    });
+
+    if (!matchesOrderItem) {
+      throw new ApiError(
+        HttpStatusCode.BAD_REQUEST,
+        `Barcode (${barcode}) SKU: '${targetSku}' does not match any pending item in this order.`
+      );
+    }
+
+    // ৬. সফল হলে রিটার্ন করা
+    return {
+      is_used_barcode: Boolean(barcodeDoc.is_used_barcode),
+      status: barcodeDoc.status as productBarcodeStatus,
+      conditions: barcodeDoc.conditions as productBarcodeCondition,
+      barcode: barcodeDoc.barcode,
+      sku: targetSku,
+    };
+  }
+
   async createPurchaseFromBarcodes(
     barcodes: string[],
     location: Types.ObjectId,
