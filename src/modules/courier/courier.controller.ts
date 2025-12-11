@@ -27,9 +27,6 @@ class Controller extends BaseController {
   transferToCourierPreOrder = this.catchAsync(
     async (req: Request, res: Response) => {
       const { id } = req.params;
-
-      // console.log(id, "pre order")
-
       const { note, marchant } = req.body;
       if (!id || !marchant) {
         return this.sendResponse(res, {
