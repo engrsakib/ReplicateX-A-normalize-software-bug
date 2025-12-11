@@ -717,18 +717,174 @@ class Service {
   }
 
   // edit order
+  // async editOrder(orderId: string, payload: Partial<IOrder>) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     // ১. পুরাতন অর্ডার আনা
+  //     const order = await OrderModel.findById(orderId).session(session);
+  //     if (!order) {
+  //       throw new ApiError(404, `Order with ID ${orderId} does not exist`);
+  //     }
+
+  //     // ২. নতুন enriched products (validate & enrich)
+  //     const enrichedOrder = await this.enrichProducts(payload);
+
+  //     if (!enrichedOrder?.products || enrichedOrder.products.length <= 0) {
+  //       throw new ApiError(
+  //         HttpStatusCode.BAD_REQUEST,
+  //         "Order cannot be empty after edit"
+  //       );
+  //     }
+
+  //     // ৩. পুরাতন order.items এর stock rollback + total_sold কমানো
+  //     // for (const prevItem of order.items ?? []) {
+  //     //   const stock = await StockModel.findOne({
+  //     //     product: prevItem.product,
+  //     //     variant: prevItem.variant,
+  //     //   }).session(session);
+
+  //     //   const lots = await LotModel.findOne({
+  //     //     variant: prevItem.variant,
+  //     //   }).session(session);
+
+  //     //   if (lots) {
+  //     //     // পূর্বে কাটাকাটা lot গুলো ফিরিয়ে দিন
+  //     //     lots.qty_available += prevItem.quantity;
+  //     //     await lots.save({ session });
+  //     //   }
+
+  //     //   if (stock) {
+  //     //     // স্টকে quantity ফেরত দিন
+  //     //     await StockModel.findByIdAndUpdate(
+  //     //       stock._id,
+  //     //       { $inc: { available_quantity: prevItem.quantity } },
+  //     //       { session }
+  //     //     );
+  //     //     // total_sold কমান
+  //     //     stock.total_sold = (stock.total_sold || 0) - prevItem.quantity;
+  //     //     if (stock.total_sold < 0) stock.total_sold = 0; // নেগেটিভ হলে ০
+  //     //     await stock.save({ session });
+  //     //   }
+  //     // }
+
+  //     // ৪. নতুন/পরিবর্তিত আইটেমের জন্য stock allocate + total_sold বাড়ানো
+  //     let total_price = 0;
+  //     for (const item of enrichedOrder.products) {
+  //       const stock = await StockModel.findOne(
+  //         { product: item.product, variant: item.variant },
+  //         null,
+  //         { session }
+  //       );
+  //       if (!stock || stock.available_quantity < item.quantity) {
+  //         throw new ApiError(
+  //           HttpStatusCode.BAD_REQUEST,
+  //           `Product ${item.product.name ?? item.product} is out of stock`
+  //         );
+  //       }
+
+  //       // FIFO lots থেকে কাটছে, lots ডিটেইল সেট হচ্ছে
+  //       const consumedLots = await this.consumeLotsFIFO(
+  //         item.product,
+  //         item.variant,
+  //         item.quantity,
+  //         session
+  //       );
+
+  //       item.lots = consumedLots;
+  //       item.subtotal = item.price * item.quantity;
+  //       total_price += item.subtotal;
+
+  //       // স্টক কমাও
+  //       stock.available_quantity -= item.quantity;
+  //       // total_sold বাড়াও
+  //       stock.total_sold = (stock.total_sold || 0) + item.quantity;
+  //       await stock.save({ session });
+  //     }
+
+  //     // ৫. আইটেমস, টোটাল প্রাইস আপডেট (items first, then amounts)
+  //     order.items = enrichedOrder.products;
+  //     order.total_items = enrichedOrder.products.length;
+  //     order.total_price = total_price;
+
+  //     // ৬. সাধারণ ফিল্ড আপডেট
+  //     if (payload.customer_name) order.customer_name = payload.customer_name;
+  //     if (payload.customer_number)
+  //       order.customer_number = payload.customer_number;
+  //     if (payload.customer_secondary_number)
+  //       order.customer_secondary_number = payload.customer_secondary_number;
+  //     if (payload.customer_email) order.customer_email = payload.customer_email;
+  //     if (payload.delivery_address)
+  //       order.delivery_address = payload.delivery_address;
+  //     if (payload.payment_type) order.payment_type = payload.payment_type;
+  //     if (payload.orders_by) order.orders_by = payload.orders_by;
+  //     if (payload.discounts) order.discounts = payload.discounts;
+
+  //     // Numeric fields: use !== undefined so 0 is accepted from payload
+  //     if (payload.paid_amount !== undefined) {
+  //       order.paid_amount = Number(payload.paid_amount);
+  //     }
+  //     if (payload.delivery_charge !== undefined) {
+  //       // if payload provides delivery_charge (even 0), use it
+  //       order.delivery_charge = Number(payload.delivery_charge);
+  //     } else {
+  //       // if payload doesn't provide delivery_charge, keep existing (or default to 0)
+  //       order.delivery_charge = order.delivery_charge ?? 0;
+  //     }
+
+  //     // Now compute totals with delivery_charge included
+  //     order.total_amount =
+  //       Number(order.total_price ?? 0) + Number(order.delivery_charge ?? 0);
+
+  //     // payable_amount typically = total_amount - paid_amount (adjust as per your business logic)
+  //     order.payable_amount =
+  //       Number(order.total_amount) - Number(order.paid_amount ?? 0);
+  //     if (order.payable_amount < 0) order.payable_amount = 0;
+
+  //     // save within session
+  //     await order.save({ session });
+
+  //     await order.save({ session });
+
+  //     // ৭. cart ক্লিয়ার (যদি থাকে)
+  //     await CartService.clearCartAfterCheckout(
+  //       order.user as Types.ObjectId,
+  //       session
+  //     );
+
+  //     await session.commitTransaction();
+  //     session.endSession();
+
+  //     // ৮. populate করে অর্ডার ফেরত দিন
+  //     const populatedOrder = await OrderModel.findById(order._id)
+  //       .populate({
+  //         path: "items.product",
+  //         select: "name slug sku thumbnail description",
+  //       })
+  //       .populate({
+  //         path: "items.variant",
+  //         select:
+  //           "attributes attribute_values regular_price sale_price sku barcode image",
+  //       });
+
+  //     return { order: populatedOrder, payment_url: "" };
+  //   } catch (err) {
+  //     await session.abortTransaction();
+  //     session.endSession();
+  //     throw err;
+  //   }
+  // }
   async editOrder(orderId: string, payload: Partial<IOrder>) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // ১. পুরাতন অর্ডার আনা
       const order = await OrderModel.findById(orderId).session(session);
       if (!order) {
         throw new ApiError(404, `Order with ID ${orderId} does not exist`);
       }
 
-      // ২. নতুন enriched products (validate & enrich)
       const enrichedOrder = await this.enrichProducts(payload);
 
       if (!enrichedOrder?.products || enrichedOrder.products.length <= 0) {
@@ -738,77 +894,17 @@ class Service {
         );
       }
 
-      // ৩. পুরাতন order.items এর stock rollback + total_sold কমানো
-      // for (const prevItem of order.items ?? []) {
-      //   const stock = await StockModel.findOne({
-      //     product: prevItem.product,
-      //     variant: prevItem.variant,
-      //   }).session(session);
-
-      //   const lots = await LotModel.findOne({
-      //     variant: prevItem.variant,
-      //   }).session(session);
-
-      //   if (lots) {
-      //     // পূর্বে কাটাকাটা lot গুলো ফিরিয়ে দিন
-      //     lots.qty_available += prevItem.quantity;
-      //     await lots.save({ session });
-      //   }
-
-      //   if (stock) {
-      //     // স্টকে quantity ফেরত দিন
-      //     await StockModel.findByIdAndUpdate(
-      //       stock._id,
-      //       { $inc: { available_quantity: prevItem.quantity } },
-      //       { session }
-      //     );
-      //     // total_sold কমান
-      //     stock.total_sold = (stock.total_sold || 0) - prevItem.quantity;
-      //     if (stock.total_sold < 0) stock.total_sold = 0; // নেগেটিভ হলে ০
-      //     await stock.save({ session });
-      //   }
-      // }
-
-      // ৪. নতুন/পরিবর্তিত আইটেমের জন্য stock allocate + total_sold বাড়ানো
       let total_price = 0;
+
       for (const item of enrichedOrder.products) {
-        const stock = await StockModel.findOne(
-          { product: item.product, variant: item.variant },
-          null,
-          { session }
-        );
-        if (!stock || stock.available_quantity < item.quantity) {
-          throw new ApiError(
-            HttpStatusCode.BAD_REQUEST,
-            `Product ${item.product.name ?? item.product} is out of stock`
-          );
-        }
-
-        // FIFO lots থেকে কাটছে, lots ডিটেইল সেট হচ্ছে
-        const consumedLots = await this.consumeLotsFIFO(
-          item.product,
-          item.variant,
-          item.quantity,
-          session
-        );
-
-        item.lots = consumedLots;
         item.subtotal = item.price * item.quantity;
         total_price += item.subtotal;
-
-        // স্টক কমাও
-        stock.available_quantity -= item.quantity;
-        // total_sold বাড়াও
-        stock.total_sold = (stock.total_sold || 0) + item.quantity;
-        await stock.save({ session });
       }
 
-      // ৫. আইটেমস, টোটাল প্রাইস আপডেট (items first, then amounts)
       order.items = enrichedOrder.products;
       order.total_items = enrichedOrder.products.length;
       order.total_price = total_price;
 
-      // ৬. সাধারণ ফিল্ড আপডেট
       if (payload.customer_name) order.customer_name = payload.customer_name;
       if (payload.customer_number)
         order.customer_number = payload.customer_number;
@@ -821,33 +917,34 @@ class Service {
       if (payload.orders_by) order.orders_by = payload.orders_by;
       if (payload.discounts) order.discounts = payload.discounts;
 
-      // Numeric fields: use !== undefined so 0 is accepted from payload
       if (payload.paid_amount !== undefined) {
         order.paid_amount = Number(payload.paid_amount);
       }
+
       if (payload.delivery_charge !== undefined) {
-        // if payload provides delivery_charge (even 0), use it
         order.delivery_charge = Number(payload.delivery_charge);
       } else {
-        // if payload doesn't provide delivery_charge, keep existing (or default to 0)
         order.delivery_charge = order.delivery_charge ?? 0;
       }
 
-      // Now compute totals with delivery_charge included
       order.total_amount =
         Number(order.total_price ?? 0) + Number(order.delivery_charge ?? 0);
 
-      // payable_amount typically = total_amount - paid_amount (adjust as per your business logic)
+      // if (payload.tax && payload.tax > 0) {
+      //     order.total_amount += Number(payload.tax);
+      // }
+
       order.payable_amount =
         Number(order.total_amount) - Number(order.paid_amount ?? 0);
+
+      if (order.discounts && order.discounts > 0) {
+        order.payable_amount -= order.discounts;
+      }
+
       if (order.payable_amount < 0) order.payable_amount = 0;
 
-      // save within session
       await order.save({ session });
 
-      await order.save({ session });
-
-      // ৭. cart ক্লিয়ার (যদি থাকে)
       await CartService.clearCartAfterCheckout(
         order.user as Types.ObjectId,
         session
@@ -856,7 +953,6 @@ class Service {
       await session.commitTransaction();
       session.endSession();
 
-      // ৮. populate করে অর্ডার ফেরত দিন
       const populatedOrder = await OrderModel.findById(order._id)
         .populate({
           path: "items.product",
