@@ -140,6 +140,9 @@ const orderSchema = new Schema<IOrder>(
       required: false,
     },
 
+    is_assigned_product_scan: { type: Boolean, default: false },
+    is_return_product_scan: { type: Boolean, default: false },
+
     logs: [
       {
         user: {

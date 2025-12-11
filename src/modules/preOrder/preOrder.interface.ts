@@ -115,6 +115,9 @@ export type IOrder = {
   order_type?: "regular" | "exchange" | "return";
 
   logs?: IOrderLog[];
+
+  is_assigned_product_scan?: boolean;
+  is_return_product_scan?: boolean;
 };
 
 export type IPreOrderPlace = {
