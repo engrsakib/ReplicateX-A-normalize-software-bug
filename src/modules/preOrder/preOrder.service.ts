@@ -110,7 +110,7 @@ class Service {
 
       // 3. Generate invoice and order id
       const generatedNum = await this.generateOrderId(session);
-      const order_id = `PRE-${generatedNum}`;
+      const order_id = `P${generatedNum}`;
       const invoice_number = await InvoiceService.generateInvoiceNumber(
         order_id,
         session
@@ -397,7 +397,7 @@ class Service {
 
       // 3. Generate invoice and order id
       const generatedNum = await this.generateOrderId(session);
-      const order_id = `PRE-${generatedNum}`;
+      const order_id = `P${generatedNum}`;
       const invoice_number = await InvoiceService.generateInvoiceNumber(
         order_id,
         session
@@ -589,7 +589,7 @@ class Service {
 
       // 3. Generate invoice and order id
       const generatedNum = await this.generateOrderId(session);
-      const order_id = `PRE-${generatedNum}`;
+      const order_id = `P${generatedNum}`;
       const invoice_number = await InvoiceService.generateInvoiceNumber(
         order_id,
         session
@@ -1551,11 +1551,29 @@ class Service {
     }
 
     // Order ID filter
+    // if (order_id) {
+    //   if (typeof order_id === "string") {
+    //     matchStage.order_id = Number(order_id);
+    //   } else {
+    //     matchStage.order_id = order_id;
+    //   }
+    // }
+    // if (order_id) {
+    //   if (typeof order_id === "string") {
+
+    //     matchStage.order_id = order_id.trim().toUpperCase();
+    //   } else {
+    //     matchStage.order_id = order_id;
+    //   }
+    // }
+
     if (order_id) {
-      if (!isNaN(Number(order_id))) {
-        matchStage.order_id = Number(order_id);
+      const idStr = String(order_id).trim();
+
+      if (/^\d+$/.test(idStr)) {
+        matchStage.order_id = `P${idStr}`;
       } else {
-        matchStage.order_id = order_id;
+        matchStage.order_id = idStr.toUpperCase();
       }
     }
 
