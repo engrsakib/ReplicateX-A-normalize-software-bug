@@ -64,6 +64,13 @@ router.post(
 );
 
 router.post(
+  "/:order_id/process-pre-order-barcodes",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.hasPermissions(PermissionEnum.ORDER_UPDATE),
+  UniqueBarcodeController.processPreOrderBarcodes
+);
+
+router.post(
   "/:order_id/process-return-barcodes",
   JwtInstance.authenticate(Object.values(ROLES)),
   JwtInstance.hasPermissions(PermissionEnum.ORDER_UPDATE),
