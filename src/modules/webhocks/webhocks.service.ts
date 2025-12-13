@@ -65,6 +65,7 @@ class service extends BaseController {
 
     const prevDeliveryCharge = Number(order.delivery_charge) || 0;
     const prevOrderStatus = order.order_status;
+    order.courier_cod_amount = order.courier_cod_amount || 0;
 
     console.log(data.notification_type, "notification type");
 

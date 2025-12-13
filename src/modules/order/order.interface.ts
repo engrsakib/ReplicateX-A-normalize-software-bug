@@ -83,6 +83,7 @@ export type IOrder = {
   total_items: number;
   total_price: number;
   delivery_charge?: number;
+  courier_delivery_charge?: number;
   total_amount: number;
   sys_ref_value?: number; //as a total purchase value
   paid_amount?: number;

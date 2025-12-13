@@ -776,7 +776,7 @@ class Service {
           const updateLog = {
             ...updated_by,
             admin_note: admin_note ?? undefined,
-            system_message: `Status changed to assigned on ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}; assigned to lot ${lot._id} and stock ${stock._id}. Prev status: ${prevStatus}; prev conditions: ${prevConditions}`,
+            system_message: `Status changed to assigned on ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}; assigned to lot ${lot._id} with per unit costs ${lot.cost_per_unit} and stock ${stock._id}. Prev status: ${prevStatus}; prev conditions: ${prevConditions}`,
           };
 
           const updated = await BarcodeModel.findOneAndUpdate(
