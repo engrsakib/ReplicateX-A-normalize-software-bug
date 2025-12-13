@@ -65,7 +65,8 @@ class service extends BaseController {
 
     const prevDeliveryCharge = Number(order.delivery_charge) || 0;
     const prevOrderStatus = order.order_status;
-    order.courier_cod_amount = order.courier_cod_amount || 0;
+    order.courier_cod_amount = data.cod_amount || 0;
+    order.courier_delivery_charge = data.delivery_charge || 0;
 
     console.log(data.notification_type, "notification type");
 
@@ -117,15 +118,31 @@ class service extends BaseController {
       if ("cod_amount" in data) {
         if (
           data.status === "delivered" ||
-          data.status === "partial_delivered" ||
-          data.status === "cancelled"
+          data.status === "partial_delivered"
         ) {
           order.paid_amount += data.cod_amount;
           order.courier_cod_amount = data.cod_amount;
         }
+        // profit calculation
+        if (data.status === ORDER_STATUS.DELIVERED) {
+          let profit =
+            (order.total_price || 0) -
+            (order.sys_ref_value || 0) -
+            (order.discounts || 0);
+          const delivaryData =
+            (order.delivery_charge || 0) - (data.delivery_charge || 0);
+
+          profit = profit + delivaryData;
+
+          if (profit < 0) {
+            order.noise_factor = Math.abs(profit);
+            profit = 0;
+          }
+          order.delta_margin = profit;
+        }
       }
       if ("delivery_charge" in data)
-        order.delivery_charge = data.delivery_charge;
+        order.courier_delivery_charge = data.delivery_charge;
       if ("tracking_message" in data)
         order.system_message = data.tracking_message;
       if ("updated_at" in data) {
@@ -158,6 +175,23 @@ class service extends BaseController {
           });
         }
       }
+
+      // if (order.order_status === ORDER_STATUS.DELIVERED) {
+      //   let profit =
+      //     (order.paid_amount || 0) -
+      //     (order.sys_ref_value || 0) -
+      //     (order.discounts || 0);
+      //   const delivaryData =
+      //     (order.delivery_charge || 0) - (order.courier_delivery_charge || 0);
+
+      //   profit = profit + delivaryData;
+
+      //   if (profit < 0) {
+      //     order.noise_factor = Math.abs(profit);
+      //     profit = 0;
+      //   }
+      //   order.delta_margin = profit;
+      // }
       await order.save();
       await courier.save();
 
