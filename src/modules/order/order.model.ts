@@ -86,11 +86,12 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       enum: Object.values(ORDER_STATUS),
       default: ORDER_STATUS.PENDING,
+      index: true,
     },
     is_delivery_charge_paid: { type: Boolean, default: false },
 
-    order_id: { type: Number, required: true },
-    invoice_number: { type: String, required: true },
+    order_id: { type: Number, required: true, index: true, unique: true },
+    invoice_number: { type: String, required: true, index: true, unique: true },
 
     delivery_address: addressSchema,
 

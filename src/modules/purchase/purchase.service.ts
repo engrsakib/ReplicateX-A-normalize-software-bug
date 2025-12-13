@@ -903,6 +903,10 @@ class Service {
   async deletePurchase(id: string): Promise<IPurchase | null> {
     return PurchaseModel.findByIdAndDelete(id).exec();
   }
+
+  async reports() {
+    // implement reports
+  }
 }
 
 export const PurchaseService = new Service();

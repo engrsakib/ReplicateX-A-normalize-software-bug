@@ -52,13 +52,18 @@ const orderSchema = new Schema<IOrder>(
       enum: ["User", "Admin"],
     },
     customer_name: { type: String, default: "" },
-    customer_number: { type: String, required: true },
+    customer_number: { type: String, required: true, index: true },
     customer_email: { type: String, default: "" },
     customer_secondary_number: { type: String, default: "" },
+
+    order_id: { type: String, required: true, index: true, unique: true },
+    invoice_number: { type: String, required: true, unique: true },
+
     orders_by: {
       type: String,
       enum: Object.values(ORDER_BY),
       required: false,
+      default: ORDER_BY.ADMIN,
     },
 
     order_type: {
@@ -86,9 +91,6 @@ const orderSchema = new Schema<IOrder>(
       default: ORDER_STATUS.PENDING,
     },
     is_delivery_charge_paid: { type: Boolean, default: false },
-
-    order_id: { type: String, required: true },
-    invoice_number: { type: String, required: true },
 
     delivery_address: addressSchema,
 
