@@ -175,23 +175,6 @@ class service extends BaseController {
           });
         }
       }
-
-      // if (order.order_status === ORDER_STATUS.DELIVERED) {
-      //   let profit =
-      //     (order.paid_amount || 0) -
-      //     (order.sys_ref_value || 0) -
-      //     (order.discounts || 0);
-      //   const delivaryData =
-      //     (order.delivery_charge || 0) - (order.courier_delivery_charge || 0);
-
-      //   profit = profit + delivaryData;
-
-      //   if (profit < 0) {
-      //     order.noise_factor = Math.abs(profit);
-      //     profit = 0;
-      //   }
-      //   order.delta_margin = profit;
-      // }
       await order.save();
       await courier.save();
 
