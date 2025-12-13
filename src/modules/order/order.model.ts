@@ -71,6 +71,7 @@ const orderSchema = new Schema<IOrder>(
 
     products: { type: [orderItemSchema], required: true },
 
+    sys_ref_value: { type: Number, required: false, default: 0 }, //as a total purchase value
     total_items: { type: Number, required: true },
     total_price: { type: Number, required: true },
     delivery_charge: { type: Number },
