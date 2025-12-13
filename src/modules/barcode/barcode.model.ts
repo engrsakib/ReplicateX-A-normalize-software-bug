@@ -15,7 +15,7 @@ const UpdateBySchema = new Schema<IupdateLogs>(
 
 const BarcodeSchema = new Schema<IBarcode>(
   {
-    barcode: { type: String, required: true, unique: true },
+    barcode: { type: String, required: true, index: true, unique: true },
     sku: { type: String, required: true },
 
     variant: { type: Schema.Types.ObjectId, ref: "Variant", required: true },
@@ -37,14 +37,22 @@ const BarcodeSchema = new Schema<IBarcode>(
       type: String,
       enum: Object.values(productBarcodeStatus),
       required: true,
+      default: productBarcodeStatus.QC_PENDING,
+      index: true,
     },
     conditions: {
       type: String,
       enum: Object.values(productBarcodeCondition),
       required: false,
       default: "",
+      index: true,
     },
-    is_used_barcode: { type: Boolean, required: false, default: false },
+    is_used_barcode: {
+      type: Boolean,
+      required: false,
+      index: true,
+      default: false,
+    },
     updated_logs: { type: [UpdateBySchema], required: false, default: [] },
   },
   { timestamps: true }
