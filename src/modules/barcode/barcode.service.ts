@@ -907,6 +907,9 @@ class Service {
         group.docs.push(doc);
       }
 
+      // for purchase and profit calculation
+      let totalTransactionCost = 0;
+
       // 5. For each group: claim barcodes atomically, then update stocks/lots/global stock, and update order item
       for (const [, group] of Array.from(groups.entries())) {
         const qty = group.barcodes.length;
@@ -1028,6 +1031,10 @@ class Service {
             );
           }
 
+          const unitCost = updatedLot.cost_per_unit || 0;
+          const totalCostForThisLot = unitCost * count;
+          totalTransactionCost += totalCostForThisLot;
+
           // If after decrement qty_available is 0, set status closed
           if ((updatedLot.qty_available ?? 0) === 0) {
             await LotModel.findByIdAndUpdate(
@@ -1045,6 +1052,8 @@ class Service {
           { session, new: true }
         );
       }
+      // Update order total cost and profit based on totalTransactionCost
+      order.sys_ref_value = (order.sys_ref_value || 0) + totalTransactionCost;
       order.is_assigned_product_scan = true;
       // 6. Save Order (all item barcode arrays updated in-memory)
       await order.save({ session });
