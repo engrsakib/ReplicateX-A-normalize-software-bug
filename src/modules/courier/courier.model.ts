@@ -52,6 +52,7 @@ const CourierSchema = new Schema(
     },
     consignment_id: {
       type: String,
+      index: true,
       trim: true,
     },
     transfer_to_courier: {
