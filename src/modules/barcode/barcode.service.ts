@@ -1760,7 +1760,7 @@ class Service {
             },
             {
               $set: {
-                status: productBarcodeStatus.IN_STOCK,
+                status: productBarcodeStatus.REFURBISHING,
                 is_used_barcode: true,
               },
               $push: { updated_logs: { $each: [updateLog], $position: 0 } },
