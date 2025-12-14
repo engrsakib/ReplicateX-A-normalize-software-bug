@@ -85,6 +85,10 @@ const orderSchema = new Schema<IOrder>(
     paid_amount: { type: Number, default: 0 },
     payable_amount: { type: Number, required: true, default: 0 },
 
+    return_amount: { type: Number, default: 0 },
+    courier_delivery_charge: { type: Number, default: 0 },
+    prev_total_amount: { type: Number, required: false, default: 0 },
+
     order_status: {
       type: String,
       enum: Object.values(PRE_ORDER_STATUS),

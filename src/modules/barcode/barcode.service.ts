@@ -1607,6 +1607,301 @@ class Service {
     }
   }
 
+  async processReturnBarcodesForPreOrder(
+    orderId: string,
+    barcodes: string[],
+    updatedBy: { name: string; role: string; date: Date }
+  ) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Validate & dedupe input barcodes
+      if (!Array.isArray(barcodes) || barcodes.length === 0) {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "barcodes array is required"
+        );
+      }
+      // Check duplicates in input explicitly (fail fast)
+      const uniqSet = new Set(barcodes);
+      if (uniqSet.size !== barcodes.length) {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "Duplicate barcodes provided in input"
+        );
+      }
+      const uniqBarcodes = Array.from(uniqSet);
+      let allItemsCounted = 0;
+
+      // ✅ [1. NEW CODE START] ভ্যারিয়েবল ডিক্লেয়ারেশন
+      let totalRefundValue = 0;
+      // ✅ [1. NEW CODE END]
+
+      // 1. Fetch Order
+      const order = await PreOrderModel.findOne({ order_id: orderId }).session(
+        session
+      );
+
+      if (!order) {
+        throw new ApiError(HttpStatusCode.NOT_FOUND, "Order not found");
+      }
+
+      if (order.items) {
+        allItemsCounted = order.items.reduce(
+          (total, item) => total + (item.quantity || 0),
+          0
+        );
+      }
+
+      // 2. Fetch Barcodes (initial read to get product/variant/stock/lot info)
+      const barcodeDocs = await BarcodeModel.find({
+        barcode: { $in: uniqBarcodes },
+      })
+        .session(session)
+        .exec();
+
+      if (barcodeDocs.length !== uniqBarcodes.length) {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "Duplicate barcodes provided in input"
+        );
+      }
+
+      // 3. Validate initial state quickly (optional)
+      for (const doc of barcodeDocs) {
+        if (!doc.is_used_barcode) {
+          throw new ApiError(
+            HttpStatusCode.BAD_REQUEST,
+            `Barcode ${doc.barcode} - sku ${doc.sku} is not assigned for any product yet`
+          );
+        }
+        // We allow status check but claim will enforce it atomically
+        if (doc.status !== productBarcodeStatus.ASSIGNED) {
+          throw new ApiError(
+            HttpStatusCode.BAD_REQUEST,
+            `Barcode ${doc.barcode} - sku ${doc.sku} is not assigned (status: ${doc.status})`
+          );
+        }
+      }
+
+      // 4. Group barcodes by Variant (product+variant)
+      const groups = new Map<
+        string,
+        {
+          product: Types.ObjectId;
+          variant: Types.ObjectId;
+          barcodes: string[];
+          docs: typeof barcodeDocs;
+        }
+      >();
+
+      for (const doc of barcodeDocs) {
+        const key = `${doc.product.toString()}_${doc.variant.toString()}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            product: doc.product as Types.ObjectId,
+            variant: doc.variant as Types.ObjectId,
+            barcodes: [],
+            docs: [],
+          });
+        }
+        const group = groups.get(key)!;
+        group.barcodes.push(doc.barcode);
+        group.docs.push(doc);
+      }
+
+      // 5. For each group: claim barcodes, update stocks/lots/global stock, and update order item
+      for (const [, group] of Array.from(groups.entries())) {
+        const qty = group.barcodes.length;
+
+        if (qty === 0) {
+          continue;
+        }
+
+        // A. Find matching order item
+        const orderItem = (order.items ?? []).find(
+          (item) =>
+            item.product.toString() === group.product.toString() &&
+            item.variant.toString() === group.variant.toString()
+        );
+
+        if (!orderItem) {
+          throw new ApiError(
+            HttpStatusCode.BAD_REQUEST,
+            `The order doesn’t include any item with the specified barcode ${group.barcodes.join(", ")} sku ${group.docs[0]?.sku}. Product ID: ${group.product}, Variant ID: ${group.variant}`
+          );
+        }
+
+        // ✅ [2. NEW CODE START] ক্যালকুলেশন
+        // এই গ্রুপের আইটেমগুলোর দাম যোগ করা হচ্ছে
+        if (orderItem.price) {
+          totalRefundValue += orderItem.price * qty;
+        }
+        // ✅ [2. NEW CODE END]
+
+        // B. Atomically claim each barcode
+        const claimedDocs: Array<(typeof barcodeDocs)[number]> = [];
+        for (const doc of group.docs) {
+          const prevStatus = doc.status;
+          const prevConditions = (doc as any).conditions;
+          const updateLog = {
+            name: updatedBy.name,
+            role: updatedBy.role,
+            date: updatedBy.date,
+            system_message: `Returned Order #${order.order_id} on ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}; Prev status: ${prevStatus}; Prev conditions: ${prevConditions}`,
+          };
+
+          const claimed = await BarcodeModel.findOneAndUpdate(
+            {
+              barcode: doc.barcode,
+              status: productBarcodeStatus.ASSIGNED,
+              is_used_barcode: true,
+            },
+            {
+              $set: {
+                status: productBarcodeStatus.IN_STOCK,
+                is_used_barcode: true,
+              },
+              $push: { updated_logs: { $each: [updateLog], $position: 0 } },
+            },
+            { session, new: true }
+          ).exec();
+
+          if (!claimed) {
+            throw new ApiError(
+              HttpStatusCode.BAD_REQUEST,
+              `Failed to claim barcode ${doc.barcode} (may be already assigned or out of stock)`
+            );
+          }
+          claimedDocs.push(claimed);
+        }
+
+        // C. Update Order item in-memory
+        orderItem.barcode = orderItem.barcode ?? [];
+        orderItem.barcode.push(...group.barcodes);
+
+        // D. Aggregate stock and lot counts from claimed docs
+        const stockMap = new Map<string, number>();
+        const lotMap = new Map<string, number>();
+        for (const d of claimedDocs) {
+          if (d.stock) {
+            const sId = d.stock.toString();
+            stockMap.set(sId, (stockMap.get(sId) || 0) + 1);
+          }
+          if (d.lot) {
+            const lId = d.lot.toString();
+            lotMap.set(lId, (lotMap.get(lId) || 0) + 1);
+          }
+        }
+
+        // E. Increase Stock Available Quantity
+        for (const [stockId, count] of Array.from(stockMap.entries())) {
+          const updatedStock = await StockModel.findOneAndUpdate(
+            { _id: stockId },
+            { $inc: { available_quantity: count } },
+            { session, new: true }
+          ).exec();
+
+          if (!updatedStock) {
+            throw new ApiError(
+              HttpStatusCode.BAD_REQUEST,
+              `Stock not found for stockId ${stockId}`
+            );
+          }
+        }
+
+        // F. Increase Lot qty_available
+        for (const [lotId, count] of Array.from(lotMap.entries())) {
+          const updatedLot = await LotModel.findOneAndUpdate(
+            { _id: lotId },
+            { $inc: { qty_available: count } },
+            { session, new: true }
+          ).exec();
+
+          if (!updatedLot) {
+            throw new ApiError(
+              HttpStatusCode.BAD_REQUEST,
+              `Lot not found for lotId ${lotId}`
+            );
+          }
+
+          // Check to reactivate lot if it was closed (optional logic based on your needs)
+          if (
+            (updatedLot.qty_available ?? 0) > 0 &&
+            updatedLot.status !== "active"
+          ) {
+            await LotModel.findByIdAndUpdate(
+              lotId,
+              { $set: { status: "active" } },
+              { session }
+            );
+          }
+        }
+
+        // G. Update Global Stock (Added as requested)
+        await GlobalStockModel.findOneAndUpdate(
+          { product: group.product, variant: group.variant },
+          { $inc: { available_quantity: qty } },
+          { session }
+        );
+      } // End of group loop
+
+      // ✅ [3. NEW CODE START]
+      if (totalRefundValue > 0) {
+        // backup previous total amount only if it's positive or undefined
+        if (!order.total_amount || order.total_amount > 0) {
+          order.prev_total_amount = order.total_amount;
+        }
+
+        // return amount update
+        order.return_amount = (order.return_amount || 0) + totalRefundValue;
+
+        // Reduce Total Amount
+        order.total_amount = Math.max(
+          0,
+          (order.total_amount || 0) - totalRefundValue
+        );
+
+        // ঘ. পেয়েবল এমাউন্ট আপডেট (যদি টাকা বাকি থাকে)
+        // if (order.payable_amount as number > 0) {
+        //   order.payable_amount = Math.max(
+        //     0,
+        //     order.payable_amount - totalRefundValue
+        //   );
+        // }
+
+        // ঙ. লগ রাখা
+        (order.logs ??= []).push({
+          user: updatedBy.name,
+          time: new Date(),
+          action: `RETURN_ADJUSTMENT: Reduced ${totalRefundValue} TK for returned items. New Total: ${order.total_amount}`,
+        });
+      }
+      // ✅ [3. NEW CODE END]
+
+      order.is_return_product_scan = true;
+      order.order_status =
+        allItemsCounted === uniqBarcodes.length
+          ? ORDER_STATUS.RETURNED
+          : ORDER_STATUS.PARTIAL;
+
+      // 6. Save Order
+      await order.save({ session });
+
+      await session.commitTransaction();
+      return {
+        success: true,
+        message: "Barcodes assigned & Amount adjusted successfully",
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
   private async generatePurchaseNumber(
     locationId: Types.ObjectId | string,
     session: mongoose.ClientSession

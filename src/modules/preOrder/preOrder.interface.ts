@@ -59,7 +59,7 @@ type IAdminNote = {
 };
 
 export type IOrderLog = {
-  user?: Types.ObjectId | "webhook" | null;
+  user?: Types.ObjectId | "webhook" | null | string;
   time: Date;
   action: string;
 };
@@ -82,6 +82,10 @@ export type IOrder = {
   total_items: number;
   total_price: number;
   delivery_charge?: number;
+
+  return_amount?: number;
+  courier_delivery_charge?: number;
+  prev_total_amount?: number;
 
   total_amount: number;
   paid_amount?: number;
