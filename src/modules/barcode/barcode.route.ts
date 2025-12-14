@@ -83,5 +83,11 @@ router.post(
   JwtInstance.hasPermissions(PermissionEnum.ORDER_UPDATE),
   UniqueBarcodeController.processReturnBarcodes
 );
+router.post(
+  "/:order_id/process-return-barcodes/pre-order",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.hasPermissions(PermissionEnum.ORDER_UPDATE),
+  UniqueBarcodeController.processReturnBarcodesForPreOrder
+);
 
 export const UniqueBarcodeRoutes = router;
