@@ -1103,7 +1103,7 @@ class Service {
         throw new ApiError(HttpStatusCode.NOT_FOUND, "Order not found");
       }
 
-      // 2. Fetch Barcodes (initial read to get product/variant/stock/lot info)
+      // 2. Fetch Barcodes
       const barcodeDocs = await BarcodeModel.find({
         barcode: { $in: uniqBarcodes },
       })
@@ -1117,7 +1117,7 @@ class Service {
         );
       }
 
-      // 3. Validate initial state quickly (optional) but final claim is done atomically below.
+      // 3. Validate initial state
       for (const doc of barcodeDocs) {
         if (!doc.is_used_barcode) {
           throw new ApiError(
@@ -1125,7 +1125,6 @@ class Service {
             `Barcode ${doc.barcode} - sku ${doc.sku} is not assigned for any product yet`
           );
         }
-        // We allow status check but claim will enforce it atomically
         if (doc.status !== productBarcodeStatus.IN_STOCK) {
           throw new ApiError(
             HttpStatusCode.BAD_REQUEST,
@@ -1134,7 +1133,7 @@ class Service {
         }
       }
 
-      // 4. Group barcodes by Variant (product+variant) for order mapping and stock/lot batching
+      // 4. Group barcodes
       const groups = new Map<
         string,
         {
@@ -1160,13 +1159,15 @@ class Service {
         group.docs.push(doc);
       }
 
-      // 5. For each group: claim barcodes atomically, then update stocks/lots/global stock, and update order item
+      // ✅ [1. NEW CODE START] খরচের হিসাব রাখার ভ্যারিয়েবল
+      let totalTransactionCost = 0;
+      // ✅ [1. NEW CODE END]
+
+      // 5. For each group
       for (const [, group] of Array.from(groups.entries())) {
         const qty = group.barcodes.length;
 
-        if (qty === 0) {
-          continue; // skip empty groups (should not happen)
-        }
+        if (qty === 0) continue;
 
         // A. Find matching order item
         const orderItem = (order.items ?? []).find(
@@ -1178,7 +1179,9 @@ class Service {
         if (!orderItem) {
           throw new ApiError(
             HttpStatusCode.BAD_REQUEST,
-            `The order doesn’t include any item with the specified barcode ${group.barcodes.join(", ")} sku ${group.docs[0]?.sku}. Product ID: ${group.product}, Variant ID: ${group.variant}`
+            `The order doesn’t include any item with the specified barcode ${group.barcodes.join(
+              ", "
+            )}`
           );
         }
 
@@ -1189,12 +1192,11 @@ class Service {
         if (alreadyAssigned + qty > orderItem.quantity) {
           throw new ApiError(
             HttpStatusCode.BAD_REQUEST,
-            `Too many barcodes for item ${group.product}. Ordered: ${orderItem.quantity}, Already Assigned: ${alreadyAssigned}, New: ${qty}`
+            `Too many barcodes for item ${group.product}.`
           );
         }
 
-        // B. Atomically claim each barcode (ensures no race with other processes)
-        // Use per-barcode findOneAndUpdate with precondition { status: IN_STOCK, is_used_barcode: false }
+        // B. Atomically claim each barcode
         const claimedDocs: Array<(typeof barcodeDocs)[number]> = [];
         for (const doc of group.docs) {
           const prevStatus = doc.status;
@@ -1203,7 +1205,11 @@ class Service {
             name: updatedBy.name,
             role: updatedBy.role,
             date: updatedBy.date,
-            system_message: `Assigned to Order #${order.order_id} on ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}; Prev status: ${prevStatus}; Prev conditions: ${prevConditions}`,
+            system_message: `Assigned to PreOrder #${
+              order.order_id
+            } on ${new Date().toLocaleString("en-GB", {
+              timeZone: "Asia/Dhaka",
+            })}; Prev status: ${prevStatus}; Prev conditions: ${prevConditions}`,
           };
 
           const claimed = await BarcodeModel.findOneAndUpdate(
@@ -1223,20 +1229,19 @@ class Service {
           ).exec();
 
           if (!claimed) {
-            // If any barcode cannot be claimed atomically, abort overall operation
             throw new ApiError(
               HttpStatusCode.BAD_REQUEST,
-              `Failed to claim barcode ${doc.barcode} (may be already assigned or out of stock)`
+              `Failed to claim barcode ${doc.barcode}`
             );
           }
           claimedDocs.push(claimed);
         }
 
-        // C. Update Order item in-memory (we'll save order at the end of group processing)
+        // C. Update Order item in-memory
         orderItem.barcode = orderItem.barcode ?? [];
         orderItem.barcode.push(...group.barcodes);
 
-        // D. Aggregate stock and lot counts from claimed docs
+        // D. Aggregate stock and lot counts
         const stockMap = new Map<string, number>();
         const lotMap = new Map<string, number>();
         for (const d of claimedDocs) {
@@ -1250,7 +1255,7 @@ class Service {
           }
         }
 
-        // E. Decrease Stock Available Quantity atomically with precondition (no negative)
+        // E. Decrease Stock
         for (const [stockId, count] of Array.from(stockMap.entries())) {
           const updatedStock = await StockModel.findOneAndUpdate(
             { _id: stockId, available_quantity: { $gte: count } },
@@ -1261,12 +1266,12 @@ class Service {
           if (!updatedStock) {
             throw new ApiError(
               HttpStatusCode.BAD_REQUEST,
-              `Insufficient stock for stockId ${stockId} while fulfilling order`
+              `Insufficient stock for stockId ${stockId}`
             );
           }
         }
 
-        // F. Decrease Lot qty_available atomically and set status to 'closed' if becomes zero
+        // F. Decrease Lot & Calculate Cost
         for (const [lotId, count] of Array.from(lotMap.entries())) {
           const updatedLot = await LotModel.findOneAndUpdate(
             { _id: lotId, qty_available: { $gte: count } },
@@ -1281,7 +1286,13 @@ class Service {
             );
           }
 
-          // If after decrement qty_available is 0, set status closed
+          // ✅ [2. NEW CODE START] লটের খরচ হিসাব করা
+          const unitCost = updatedLot.cost_per_unit || 0;
+          const totalCostForThisLot = unitCost * count;
+          totalTransactionCost += totalCostForThisLot;
+          // ✅ [2. NEW CODE END]
+
+          // Close lot if empty
           if ((updatedLot.qty_available ?? 0) === 0) {
             await LotModel.findByIdAndUpdate(
               lotId,
@@ -1291,15 +1302,21 @@ class Service {
           }
         }
 
-        // G. Update Global Stock (reduce qty_reserved)
+        // G. Update Global Stock
         await GlobalStockModel.findOneAndUpdate(
           { product: group.product, variant: group.variant },
           { $inc: { available_quantity: -qty } },
           { session, new: true }
         );
-      }
+      } // End of group loop
+
+      // ✅ [3. NEW CODE START] অর্ডারে খরচ আপডেট করা
+      order.sys_ref_value = (order.sys_ref_value || 0) + totalTransactionCost;
+      // ✅ [3. NEW CODE END]
+
       order.is_assigned_product_scan = true;
-      // 6. Save Order (all item barcode arrays updated in-memory)
+
+      // 6. Save Order
       await order.save({ session });
 
       await session.commitTransaction();
