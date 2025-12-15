@@ -88,6 +88,9 @@ export type IOrder = {
   prev_total_amount?: number;
 
   total_amount: number;
+  sys_ref_value?: number; //as a total purchase value
+  noise_factor?: number; // as a loss margin
+  delta_margin?: number; // as a profit margin
   paid_amount?: number;
   payable_amount?: number;
   new_cod?: number;
