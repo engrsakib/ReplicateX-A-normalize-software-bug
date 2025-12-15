@@ -139,11 +139,18 @@ class service extends BaseController {
 
           profit = profit + delivaryData;
 
+          // if (profit < 0) {
+          //   order.noise_factor = Math.abs(profit);
+          //   profit = 0;
+          // }
+          // order.delta_margin = profit;
           if (profit < 0) {
             order.noise_factor = Math.abs(profit);
-            profit = 0;
+            order.delta_margin = 0;
+          } else {
+            order.delta_margin = profit;
+            order.noise_factor = 0;
           }
-          order.delta_margin = profit;
         }
       }
       if ("delivery_charge" in data)

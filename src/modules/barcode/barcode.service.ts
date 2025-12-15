@@ -1338,14 +1338,13 @@ class Service {
     session.startTransaction();
 
     try {
-      // Validate & dedupe input barcodes
+      // --- VALIDATION & SETUP ---
       if (!Array.isArray(barcodes) || barcodes.length === 0) {
         throw new ApiError(
           HttpStatusCode.BAD_REQUEST,
           "barcodes array is required"
         );
       }
-      // Check duplicates in input explicitly (fail fast)
       const uniqSet = new Set(barcodes);
       if (uniqSet.size !== barcodes.length) {
         throw new ApiError(
@@ -1356,9 +1355,9 @@ class Service {
       const uniqBarcodes = Array.from(uniqSet);
       let allItemsCounted = 0;
 
-      // ✅ [1. NEW CODE START] ভ্যারিয়েবল ডিক্লেয়ারেশন
-      let totalRefundValue = 0;
-      // ✅ [1. NEW CODE END]
+      // ✅ ভ্যারিয়েবল ডিক্লেয়ারেশন (টাকা ও খরচের হিসাব রাখার জন্য)
+      let totalRefundValue = 0; // কাস্টমারকে ফেরত দেওয়া টাকা (Selling Price)
+      let totalReturnedCost = 0; // আমাদের স্টকে ফেরত আসা টাকার পরিমাণ (Cost Price)
 
       // 1. Fetch Order
       const order = await OrderModel.findOne({ order_id: orderId }).session(
@@ -1376,7 +1375,7 @@ class Service {
         );
       }
 
-      // 2. Fetch Barcodes (initial read to get product/variant/stock/lot info)
+      // 2. Fetch Barcodes
       const barcodeDocs = await BarcodeModel.find({
         barcode: { $in: uniqBarcodes },
       })
@@ -1390,24 +1389,23 @@ class Service {
         );
       }
 
-      // 3. Validate initial state quickly (optional)
+      // 3. Initial Validation
       for (const doc of barcodeDocs) {
         if (!doc.is_used_barcode) {
           throw new ApiError(
             HttpStatusCode.BAD_REQUEST,
-            `Barcode ${doc.barcode} - sku ${doc.sku} is not assigned for any product yet`
+            `Barcode ${doc.barcode} is not assigned yet`
           );
         }
-        // We allow status check but claim will enforce it atomically
         if (doc.status !== productBarcodeStatus.ASSIGNED) {
           throw new ApiError(
             HttpStatusCode.BAD_REQUEST,
-            `Barcode ${doc.barcode} - sku ${doc.sku} is not assigned (status: ${doc.status})`
+            `Barcode ${doc.barcode} is not assigned (status: ${doc.status})`
           );
         }
       }
 
-      // 4. Group barcodes by Variant (product+variant)
+      // 4. Grouping Barcodes
       const groups = new Map<
         string,
         {
@@ -1433,15 +1431,11 @@ class Service {
         group.docs.push(doc);
       }
 
-      // 5. For each group: claim barcodes, update stocks/lots/global stock, and update order item
+      // 5. Main Processing Loop
       for (const [, group] of Array.from(groups.entries())) {
         const qty = group.barcodes.length;
+        if (qty === 0) continue;
 
-        if (qty === 0) {
-          continue;
-        }
-
-        // A. Find matching order item
         const orderItem = (order.items ?? []).find(
           (item) =>
             item.product.toString() === group.product.toString() &&
@@ -1451,27 +1445,23 @@ class Service {
         if (!orderItem) {
           throw new ApiError(
             HttpStatusCode.BAD_REQUEST,
-            `The order doesn’t include any item with the specified barcode ${group.barcodes.join(", ")} sku ${group.docs[0]?.sku}. Product ID: ${group.product}, Variant ID: ${group.variant}`
+            `Item not found in order for barcodes: ${group.barcodes.join(", ")}`
           );
         }
 
-        // ✅ [2. NEW CODE START] ক্যালকুলেশন
-        // এই গ্রুপের আইটেমগুলোর দাম যোগ করা হচ্ছে
+        // ✅ [A] Refund Value Calculation (বিক্রয় মূল্য যোগ করা)
         if (orderItem.price) {
           totalRefundValue += orderItem.price * qty;
         }
-        // ✅ [2. NEW CODE END]
 
-        // B. Atomically claim each barcode
+        // [B] Barcode Claim (স্ট্যাটাস IN_STOCK করা)
         const claimedDocs: Array<(typeof barcodeDocs)[number]> = [];
         for (const doc of group.docs) {
-          const prevStatus = doc.status;
-          const prevConditions = (doc as any).conditions;
           const updateLog = {
             name: updatedBy.name,
             role: updatedBy.role,
             date: updatedBy.date,
-            system_message: `Returned Order #${order.order_id} on ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}; Prev status: ${prevStatus}; Prev conditions: ${prevConditions}`,
+            system_message: `Returned Order #${order.order_id} on ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })}`,
           };
 
           const claimed = await BarcodeModel.findOneAndUpdate(
@@ -1493,17 +1483,17 @@ class Service {
           if (!claimed) {
             throw new ApiError(
               HttpStatusCode.BAD_REQUEST,
-              `Failed to claim barcode ${doc.barcode} (may be already assigned or out of stock)`
+              `Failed to claim barcode ${doc.barcode}`
             );
           }
           claimedDocs.push(claimed);
         }
 
-        // C. Update Order item in-memory
+        // [C] Update Order Item (in-memory)
         orderItem.barcode = orderItem.barcode ?? [];
         orderItem.barcode.push(...group.barcodes);
 
-        // D. Aggregate stock and lot counts from claimed docs
+        // [D] Stock & Lot Maps Preparation
         const stockMap = new Map<string, number>();
         const lotMap = new Map<string, number>();
         for (const d of claimedDocs) {
@@ -1517,29 +1507,22 @@ class Service {
           }
         }
 
-        // E. Increase Stock Available Quantity
+        // [E] Stock Update
         for (const [stockId, count] of Array.from(stockMap.entries())) {
-          const updatedStock = await StockModel.findOneAndUpdate(
+          await StockModel.findOneAndUpdate(
             { _id: stockId },
             { $inc: { available_quantity: count } },
             { session, new: true }
-          ).exec();
-
-          if (!updatedStock) {
-            throw new ApiError(
-              HttpStatusCode.BAD_REQUEST,
-              `Stock not found for stockId ${stockId}`
-            );
-          }
+          );
         }
 
-        // F. Increase Lot qty_available
+        // [F] Lot Update & Cost Calculation
         for (const [lotId, count] of Array.from(lotMap.entries())) {
           const updatedLot = await LotModel.findOneAndUpdate(
             { _id: lotId },
             { $inc: { qty_available: count } },
             { session, new: true }
-          ).exec();
+          );
 
           if (!updatedLot) {
             throw new ApiError(
@@ -1548,7 +1531,11 @@ class Service {
             );
           }
 
-          // Check to reactivate lot if it was closed (optional logic based on your needs)
+          // ✅ [B] Cost Calculation (কেনা দাম বের করা)
+          const unitCost = updatedLot.cost_per_unit || 0;
+          totalReturnedCost += unitCost * count;
+
+          // Reactivate lot if needed
           if (
             (updatedLot.qty_available ?? 0) > 0 &&
             updatedLot.status !== "active"
@@ -1561,52 +1548,78 @@ class Service {
           }
         }
 
-        // G. Update Global Stock (Added as requested)
+        // [G] Global Stock Update
         await GlobalStockModel.findOneAndUpdate(
           { product: group.product, variant: group.variant },
           { $inc: { available_quantity: qty } },
           { session }
         );
-      } // End of group loop
+      } // End of Loop
 
-      // ✅ [3. NEW CODE START]
+      // --- FINANCIAL UPDATE SECTION ---
+
       if (totalRefundValue > 0) {
-        // backup previous total amount only if it's positive or undefined
-        if (!order.total_amount || order.total_amount > 0) {
+        // ১. ব্যাকআপ রাখা
+        if (!order.total_price || order.total_price > 0) {
           order.prev_total_amount = order.total_amount;
         }
 
-        // return amount update
+        // ২. Return Amount আপডেট
         order.return_amount = (order.return_amount || 0) + totalRefundValue;
 
-        // Reduce Total Amount
+        // ৩. Total Price কমানো
+        order.total_price = Math.max(
+          0,
+          (order.total_price || 0) - totalRefundValue
+        );
+
+        // ৪. Total Amount ও কমানো (যাতে কাস্টমার ডিউ কমে যায়)
         order.total_amount = Math.max(
           0,
           (order.total_amount || 0) - totalRefundValue
         );
 
-        // ঘ. পেয়েবল এমাউন্ট আপডেট (যদি টাকা বাকি থাকে)
-        // if (order.payable_amount as number > 0) {
-        //   order.payable_amount = Math.max(
-        //     0,
-        //     order.payable_amount - totalRefundValue
-        //   );
-        // }
-
-        // ঙ. লগ রাখা
+        // লগ রাখা
         (order.logs ??= []).push({
           user: updatedBy.name,
           time: new Date(),
-          action: `RETURN_ADJUSTMENT: Reduced ${totalRefundValue} TK for returned items. New Total: ${order.total_amount}`,
+          action: `RETURN_ADJUSTMENT: Reduced ${totalRefundValue} TK from Price & Amount. Cost reduced by ${totalReturnedCost} TK.`,
         });
       }
-      // ✅ [3. NEW CODE END]
 
+      // ✅ [Cost Adjustment] - sys_ref_value কমানো
+      if (totalReturnedCost > 0) {
+        order.sys_ref_value = Math.max(
+          0,
+          (order.sys_ref_value || 0) - totalReturnedCost
+        );
+      }
+
+      // অর্ডার স্ট্যাটাস আপডেট
       order.is_return_product_scan = true;
       order.order_status =
         allItemsCounted === uniqBarcodes.length
           ? ORDER_STATUS.RETURNED
           : ORDER_STATUS.PARTIAL;
+
+      // ✅ [PROFIT RE-CALCULATION] - নতুন করে লাভ/লস হিসাব
+      let profit =
+        (order.total_price || 0) -
+        (order.sys_ref_value || 0) -
+        (order.discounts || 0);
+
+      const delivaryData =
+        (order.delivery_charge || 0) - (order.courier_delivery_charge || 0);
+
+      profit = profit + delivaryData;
+
+      if (profit < 0) {
+        order.noise_factor = Math.abs(profit);
+        order.delta_margin = 0;
+      } else {
+        order.delta_margin = profit;
+        order.noise_factor = 0;
+      }
 
       // 6. Save Order
       await order.save({ session });
