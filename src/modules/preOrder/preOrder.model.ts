@@ -114,6 +114,8 @@ const orderSchema = new Schema<IOrder>(
       default: PAYMENT_STATUS.PENDING,
     },
 
+    courier_cod_amount: { type: Number, default: 0 },
+
     transfer_to_courier: { type: Boolean, default: false },
     courier: { type: Schema.Types.ObjectId, ref: "Courier", default: null },
 

@@ -8,6 +8,7 @@ import { OrderService } from "../order/order.service";
 import { BarcodeModel } from "../barcode/barcode.model";
 import { productBarcodeStatus } from "../barcode/barcode.enum";
 import { IOrderItem } from "@/interfaces/common.interface";
+import { OrderModel as PreOrderModel } from "./../preOrder/preOrder.model";
 
 // Map steadfast status to system status
 const STATUS_MAP: Record<string, string> = {
@@ -54,8 +55,12 @@ class service extends BaseController {
         message: "Order not found for this consignment ID.",
       };
     }
-
-    const order = await OrderModel.findById(courier.order);
+    let order;
+    if (courier.is_pre_order) {
+      order = await PreOrderModel.findById(courier.order);
+    } else {
+      order = await OrderModel.findById(courier.order);
+    }
     if (!order) {
       return {
         status: "error",
