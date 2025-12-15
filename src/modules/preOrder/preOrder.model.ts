@@ -79,6 +79,9 @@ const orderSchema = new Schema<IOrder>(
 
     total_items: { type: Number, required: true },
     total_price: { type: Number, required: true },
+    sys_ref_value: { type: Number }, //as a total purchase value
+    noise_factor: { type: Number }, // as a loss margin
+    delta_margin: { type: Number }, // as a profit margin
     delivery_charge: { type: Number },
     total_amount: { type: Number },
     discounts: { type: Number, default: 0 },
