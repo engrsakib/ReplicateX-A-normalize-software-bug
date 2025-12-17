@@ -113,7 +113,8 @@ class Controller extends BaseController {
   getCustomerOrderHistory = this.catchAsync(
     async (req: Request, res: Response) => {
       const query = req.query as OrderQuery;
-      const { phone, start_date, end_date } = query;
+      const { start_date, end_date } = query;
+      const phone = req.params.phone as string;
 
       if (!phone) {
         throw new ApiError(

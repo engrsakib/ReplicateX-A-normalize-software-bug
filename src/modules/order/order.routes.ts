@@ -22,6 +22,13 @@ router.get(
 );
 
 router.get(
+  "/:phone/customer-history",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.hasPermissions(PermissionEnum.ORDER_VIEW),
+  OrderController.getCustomerOrderHistory
+);
+
+router.get(
   "/user",
   JwtInstance.authenticate(Object.values(ROLES)),
   OrderController.loginUserOrder
