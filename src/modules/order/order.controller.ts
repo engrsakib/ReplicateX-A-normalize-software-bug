@@ -113,9 +113,9 @@ class Controller extends BaseController {
   getCustomerOrderHistory = this.catchAsync(
     async (req: Request, res: Response) => {
       const query = req.query as OrderQuery;
-      const { start_date, end_date } = query;
+      const { start_date, end_date, limit, page } = query;
       const phone = req.params.phone as string;
-
+      // console.log(query, "limit")
       if (!phone) {
         throw new ApiError(
           HttpStatusCode.BAD_REQUEST,
@@ -126,6 +126,8 @@ class Controller extends BaseController {
       const data = await OrderService.getCustomerOrderHistory(phone, {
         start_date,
         end_date,
+        page: page,
+        limit: limit,
       });
 
       this.sendResponse(res, {

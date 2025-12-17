@@ -152,11 +152,19 @@ export interface ICustomerHistoryResponse {
     delivery_address: any;
   } | null;
   orders: {
-    order_id: number;
-    order_status: string;
-    total_amount: number;
-    order_at: Date;
-  }[];
+    meta: {
+      page: number;
+      limit: number;
+      total: number;
+      total_pages: number;
+    };
+    data: {
+      order_id: number;
+      order_status: string;
+      total_amount: number;
+      order_at: Date;
+    }[];
+  };
   status_summary: {
     [key: string]: { count: number; total_amount: number };
   };

@@ -2063,16 +2063,25 @@ class Service {
   // user history orders
   getCustomerOrderHistory = async (
     phone: string,
-    query: { start_date?: string; end_date?: string }
+    query: {
+      start_date?: string;
+      end_date?: string;
+      page?: string;
+      limit?: string;
+    }
   ): Promise<ICustomerHistoryResponse> => {
-    const { start_date, end_date } = query;
+    const { start_date, end_date, page = 1, limit = 10 } = query;
+
+    // ২. পেজিনেশন ক্যালকুলেশন
+    const pageNumber = Math.max(Number(page), 1);
+    const limitNumber = Math.max(Number(limit), 1);
+    const skip = (pageNumber - 1) * limitNumber;
 
     const matchStage: any = {
       customer_number: phone,
     };
 
     // Date Filter Logic
-    // Date Filter Logic (Corrected)
     if (start_date || end_date) {
       matchStage.order_at = {};
 
@@ -2093,12 +2102,13 @@ class Service {
       // 1. Match Stage (Find by phone & date)
       { $match: matchStage },
 
-      // 2. Sort by latest date (To get latest address/name easily)
+      // 2. Sort by latest date
       { $sort: { order_at: -1 } },
 
-      // 3. Facet Stage (Run multiple calculations in parallel on the same filtered data)
+      // 3. Facet Stage
       {
         $facet: {
+          // ক: লেটেস্ট কাস্টমার ইনফো
           latestInfo: [
             { $limit: 1 },
             {
@@ -2109,7 +2119,10 @@ class Service {
             },
           ],
 
-          orderList: [
+          // খ: অর্ডার লিস্ট (এখন পেজিনেটেড)
+          paginatedOrders: [
+            { $skip: skip }, // পেজিনেশন লজিক
+            { $limit: limitNumber }, // পেজিনেশন লজিক
             {
               $project: {
                 order_id: 1,
@@ -2120,6 +2133,7 @@ class Service {
             },
           ],
 
+          // গ: স্ট্যাটাস ব্রেকডাউন
           statusBreakdown: [
             {
               $group: {
@@ -2130,6 +2144,7 @@ class Service {
             },
           ],
 
+          // ঘ: টোটাল কাউন্ট (মেটা ডাটার জন্য লাগবে)
           grandTotal: [
             {
               $group: {
@@ -2145,11 +2160,11 @@ class Service {
 
     // Run Aggregation
     const result = await OrderModel.aggregate(pipeline);
-    const data = result[0]; // Facet returns an array with one object
+    const data = result[0];
 
     // --- Formatting Response ---
 
-    // 1. Customer Info processing
+    // 1. Customer Info
     const customerInfo =
       data.latestInfo.length > 0
         ? {
@@ -2158,18 +2173,16 @@ class Service {
           }
         : null;
 
-    // 2. Status Summary processing (Array to Object Map conversion for easier frontend use)
+    // 2. Status Summary
     const statusSummary: Record<
       string,
       { count: number; total_amount: number }
     > = {};
 
-    // Initialize all statuses with 0 (Optional: যদি সব স্ট্যাটাস দেখাতে চান, না চাইলে এই লুপ বাদ দিতে পারেন)
     Object.values(ORDER_STATUS).forEach((status) => {
       statusSummary[status] = { count: 0, total_amount: 0 };
     });
 
-    // Populate with DB data
     data.statusBreakdown.forEach((item: any) => {
       statusSummary[item._id] = {
         count: item.count,
@@ -2177,18 +2190,31 @@ class Service {
       };
     });
 
-    // 3. Total Summary processing
-    const totalSummary =
-      data.grandTotal.length > 0
-        ? {
-            count: data.grandTotal[0].totalCount,
-            total_amount: data.grandTotal[0].totalAmount,
-          }
-        : { count: 0, total_amount: 0 };
+    // 3. Total Summary & Meta Data Calculation
+    const totalCount =
+      data.grandTotal.length > 0 ? data.grandTotal[0].totalCount : 0;
+    const totalAmount =
+      data.grandTotal.length > 0 ? data.grandTotal[0].totalAmount : 0;
+
+    const totalSummary = {
+      count: totalCount,
+      total_amount: totalAmount,
+    };
+
+    // ✅ 4. Orders Object Construction with Meta
+    const orders = {
+      meta: {
+        page: pageNumber,
+        limit: limitNumber,
+        total: totalCount,
+        total_pages: Math.ceil(totalCount / limitNumber),
+      },
+      data: data.paginatedOrders, // Facet থেকে আসা পেজিনেটেড ডাটা
+    };
 
     return {
       customer_info: customerInfo,
-      orders: data.orderList,
+      orders: orders, // নতুন ফরম্যাট
       status_summary: statusSummary,
       total_summary: totalSummary,
     };
