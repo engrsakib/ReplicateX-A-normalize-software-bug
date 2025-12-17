@@ -1596,28 +1596,80 @@ class Service {
       }
 
       // অর্ডার স্ট্যাটাস আপডেট
+      // order.is_return_product_scan = true;
+      // order.order_status =
+      //   allItemsCounted === uniqBarcodes.length
+      //     ? ORDER_STATUS.RETURNED
+      //     : ORDER_STATUS.PARTIAL;
+
+      // // ✅ [PROFIT RE-CALCULATION] - নতুন করে লাভ/লস হিসাব
+      // let profit =
+      //   (order.total_price || 0) -
+      //   (order.sys_ref_value || 0) -
+      //   (order.discounts || 0);
+
+      // const delivaryData =
+      //   (order.delivery_charge || 0) - (order.courier_delivery_charge || 0);
+
+      // profit = profit + delivaryData;
+
+      // if (profit < 0) {
+      //   order.noise_factor = Math.abs(profit);
+      //   order.delta_margin = 0;
+      // } else {
+      //   order.delta_margin = profit;
+      //   order.noise_factor = 0;
+      // }
+
+      // // 6. Save Order
+      // await order.save({ session });
+      // ... (অর্ডার স্ট্যাটাস আপডেটের পরের অংশ) ...
+
+      // অর্ডার স্ট্যাটাস আপডেট
       order.is_return_product_scan = true;
       order.order_status =
         allItemsCounted === uniqBarcodes.length
           ? ORDER_STATUS.RETURNED
           : ORDER_STATUS.PARTIAL;
 
-      // ✅ [PROFIT RE-CALCULATION] - নতুন করে লাভ/লস হিসাব
-      let profit =
+      // ✅ [PROFIT RE-CALCULATION FIXED]
+
+      // ১. প্রোডাক্টের লাভ (Product Profit)
+      const productProfit =
         (order.total_price || 0) -
         (order.sys_ref_value || 0) -
         (order.discounts || 0);
 
-      const delivaryData =
-        (order.delivery_charge || 0) - (order.courier_delivery_charge || 0);
+      // ২. ডেলিভারি লাভ/লস (Delivery Profit/Loss)
 
-      profit = profit + delivaryData;
+      // কাস্টমারের কাছে কত টাকা ধার্য ছিল?
+      const billedDeliveryCharge = order.delivery_charge || 0;
 
-      if (profit < 0) {
-        order.noise_factor = Math.abs(profit);
+      // আমরা আসলে কত টাকা পাচ্ছি? (Realized Income)
+      let actualDeliveryIncome = 0;
+
+      if (order.order_status === ORDER_STATUS.RETURNED) {
+        // যদি ফুল রিটার্ন হয়, কাস্টমার ডেলিভারি চার্জ দিবে না। তাই ইনকাম ০।
+        actualDeliveryIncome = 0;
+      } else {
+        // যদি পার্শিয়াল রিটার্ন হয়, সাধারণত কাস্টমার ডেলিভারি চার্জ দেয়।
+        // তাই যা ধার্য ছিল সেটাই ইনকাম ধরা হলো।
+        actualDeliveryIncome = billedDeliveryCharge;
+      }
+
+      // সূত্র: (আসল ইনকাম - কুরিয়ার খরচ)
+      const deliveryProfitOrLoss =
+        actualDeliveryIncome - (order.courier_delivery_charge || 0);
+
+      // ৩. টোটাল প্রফিট
+      const totalProfit = productProfit + deliveryProfitOrLoss;
+
+      // ৪. Noise Factor (Loss) সেট করা
+      if (totalProfit < 0) {
+        order.noise_factor = Math.abs(totalProfit); // এখন এখানে পুরো কুরিয়ার চার্জ লস হিসেবে আসবে
         order.delta_margin = 0;
       } else {
-        order.delta_margin = profit;
+        order.delta_margin = totalProfit;
         order.noise_factor = 0;
       }
 
