@@ -398,7 +398,6 @@ class Service {
         customer_email: data.customer_email,
         orders_by: order_by,
         is_assigned_product_scan: false,
-
         items,
         total_items,
         total_price,
