@@ -154,6 +154,8 @@ const orderSchema = new Schema<IOrder>(
       required: false,
     },
 
+    placed_order_duplicate_count: { type: Number, default: 0 },
+
     logs: [
       {
         user: {

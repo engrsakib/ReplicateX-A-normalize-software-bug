@@ -371,6 +371,23 @@ class Service {
 
       const order_by: IOrderBy = role ? role : "guest";
 
+      const existingPlacedOrders = await OrderModel.find({
+        customer_number: data.customer_number,
+        order_status: ORDER_STATUS.PLACED,
+      })
+        .select("placed_order_duplicate_count")
+        .sort({ placed_order_duplicate_count: 1 })
+        .session(session);
+
+      const existingCountsSet = new Set(
+        existingPlacedOrders.map((o) => o.placed_order_duplicate_count || 0)
+      );
+
+      let newDuplicateCount = 1;
+      while (existingCountsSet.has(newDuplicateCount)) {
+        newDuplicateCount++;
+      }
+
       // console.log(data.user_id, "admin placing order for user");
 
       const payload: IOrder = {
@@ -394,6 +411,7 @@ class Service {
         order_id,
         payment_type: data.payment_type,
         payment_status: PAYMENT_STATUS.PENDING,
+        placed_order_duplicate_count: newDuplicateCount,
         order_at: new Date(),
         order_status: total_stock_issue
           ? ORDER_STATUS.AWAITING_STOCK

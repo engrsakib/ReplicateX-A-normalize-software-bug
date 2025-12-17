@@ -122,6 +122,8 @@ export type IOrder = {
 
   is_pre_order?: boolean;
 
+  placed_order_duplicate_count?: number;
+
   logs?: IOrderLog[];
 };
 
