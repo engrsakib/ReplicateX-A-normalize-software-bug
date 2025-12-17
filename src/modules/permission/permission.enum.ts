@@ -4,6 +4,7 @@ export enum PermissionEnum {
   ORDER_UPDATE = "order.update",
   ORDER_VIEW = "order.view",
   ORDER_REPORT_VIEW = "order.report.view",
+  CUSTOMER_ORDER_REPORT_VIEW = "customer.order.report.view",
   ORDER_SUPER_UPDATE = "order.super.update",
 
   PRODUCT_CREATE = "product.create",
