@@ -110,6 +110,32 @@ class Controller extends BaseController {
     });
   });
 
+  getCustomerOrderHistory = this.catchAsync(
+    async (req: Request, res: Response) => {
+      const query = req.query as OrderQuery;
+      const { phone, start_date, end_date } = query;
+
+      if (!phone) {
+        throw new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "Phone number is required to fetch customer history"
+        );
+      }
+
+      const data = await OrderService.getCustomerOrderHistory(phone, {
+        start_date,
+        end_date,
+      });
+
+      this.sendResponse(res, {
+        statusCode: HttpStatusCode.OK,
+        success: true,
+        message: "Customer order history & stats retrieved successfully",
+        data,
+      });
+    }
+  );
+
   updateOrderStatus = this.catchAsync(async (req: Request, res: Response) => {
     const { id, status } = req.body;
     if (!id || !status) {

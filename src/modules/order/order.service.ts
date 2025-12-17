@@ -2071,14 +2071,21 @@ class Service {
       customer_number: phone,
     };
 
-    // Date Filter Logic (আপনার কোডের মতোই)
+    // Date Filter Logic
+    // Date Filter Logic (Corrected)
     if (start_date || end_date) {
       matchStage.order_at = {};
+
       if (start_date) {
-        matchStage.order_at.$gte = new Date(start_date);
+        const start = new Date(start_date);
+        start.setHours(0, 0, 0, 0);
+        matchStage.order_at.$gte = start;
       }
+
       if (end_date) {
-        matchStage.order_at.$lte = new Date(end_date);
+        const end = new Date(end_date);
+        end.setHours(23, 59, 59, 999);
+        matchStage.order_at.$lte = end;
       }
     }
 
@@ -2092,7 +2099,6 @@ class Service {
       // 3. Facet Stage (Run multiple calculations in parallel on the same filtered data)
       {
         $facet: {
-          // ক: লেটেস্ট কাস্টমার ইনফো (১ম অর্ডার থেকে)
           latestInfo: [
             { $limit: 1 },
             {
@@ -2103,7 +2109,6 @@ class Service {
             },
           ],
 
-          // খ: সব অর্ডারের লিস্ট (আইডি, স্ট্যাটাস, এমাউন্ট)
           orderList: [
             {
               $project: {
@@ -2115,7 +2120,6 @@ class Service {
             },
           ],
 
-          // গ: স্ট্যাটাস অনুযায়ী কাউন্ট এবং টাকার হিসাব
           statusBreakdown: [
             {
               $group: {
@@ -2126,7 +2130,6 @@ class Service {
             },
           ],
 
-          // ঘ: সব অর্ডারের টোটাল কাউন্ট ও টাকার হিসাব
           grandTotal: [
             {
               $group: {
