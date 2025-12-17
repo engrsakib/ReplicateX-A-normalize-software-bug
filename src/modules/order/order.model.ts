@@ -51,7 +51,7 @@ const orderSchema = new Schema<IOrder>(
       enum: ["User", "Admin"],
     },
     customer_name: { type: String, default: "" },
-    customer_number: { type: String, required: true },
+    customer_number: { type: String, required: true, index: true },
     customer_email: { type: String, default: "" },
     customer_secondary_number: { type: String, default: "" },
     orders_by: {

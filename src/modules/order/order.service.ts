@@ -1,6 +1,7 @@
 import mongoose, { Types } from "mongoose";
 import { CartService } from "../cart/cart.service";
 import {
+  ICustomerHistoryResponse,
   IOrder,
   IOrderBy,
   IOrderItem,
@@ -2058,6 +2059,137 @@ class Service {
       data: orders,
     };
   }
+
+  // user history orders
+  getCustomerOrderHistory = async (
+    phone: string,
+    query: { start_date?: string; end_date?: string }
+  ): Promise<ICustomerHistoryResponse> => {
+    const { start_date, end_date } = query;
+
+    const matchStage: any = {
+      customer_number: phone,
+    };
+
+    // Date Filter Logic (আপনার কোডের মতোই)
+    if (start_date || end_date) {
+      matchStage.order_at = {};
+      if (start_date) {
+        matchStage.order_at.$gte = new Date(start_date);
+      }
+      if (end_date) {
+        matchStage.order_at.$lte = new Date(end_date);
+      }
+    }
+
+    const pipeline: any[] = [
+      // 1. Match Stage (Find by phone & date)
+      { $match: matchStage },
+
+      // 2. Sort by latest date (To get latest address/name easily)
+      { $sort: { order_at: -1 } },
+
+      // 3. Facet Stage (Run multiple calculations in parallel on the same filtered data)
+      {
+        $facet: {
+          // ক: লেটেস্ট কাস্টমার ইনফো (১ম অর্ডার থেকে)
+          latestInfo: [
+            { $limit: 1 },
+            {
+              $project: {
+                customer_name: 1,
+                delivery_address: 1,
+              },
+            },
+          ],
+
+          // খ: সব অর্ডারের লিস্ট (আইডি, স্ট্যাটাস, এমাউন্ট)
+          orderList: [
+            {
+              $project: {
+                order_id: 1,
+                order_status: 1,
+                total_amount: 1,
+                order_at: 1,
+              },
+            },
+          ],
+
+          // গ: স্ট্যাটাস অনুযায়ী কাউন্ট এবং টাকার হিসাব
+          statusBreakdown: [
+            {
+              $group: {
+                _id: "$order_status",
+                count: { $sum: 1 },
+                amount: { $sum: "$total_amount" },
+              },
+            },
+          ],
+
+          // ঘ: সব অর্ডারের টোটাল কাউন্ট ও টাকার হিসাব
+          grandTotal: [
+            {
+              $group: {
+                _id: null,
+                totalCount: { $sum: 1 },
+                totalAmount: { $sum: "$total_amount" },
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    // Run Aggregation
+    const result = await OrderModel.aggregate(pipeline);
+    const data = result[0]; // Facet returns an array with one object
+
+    // --- Formatting Response ---
+
+    // 1. Customer Info processing
+    const customerInfo =
+      data.latestInfo.length > 0
+        ? {
+            customer_name: data.latestInfo[0].customer_name,
+            delivery_address: data.latestInfo[0].delivery_address,
+          }
+        : null;
+
+    // 2. Status Summary processing (Array to Object Map conversion for easier frontend use)
+    const statusSummary: Record<
+      string,
+      { count: number; total_amount: number }
+    > = {};
+
+    // Initialize all statuses with 0 (Optional: যদি সব স্ট্যাটাস দেখাতে চান, না চাইলে এই লুপ বাদ দিতে পারেন)
+    Object.values(ORDER_STATUS).forEach((status) => {
+      statusSummary[status] = { count: 0, total_amount: 0 };
+    });
+
+    // Populate with DB data
+    data.statusBreakdown.forEach((item: any) => {
+      statusSummary[item._id] = {
+        count: item.count,
+        total_amount: item.amount,
+      };
+    });
+
+    // 3. Total Summary processing
+    const totalSummary =
+      data.grandTotal.length > 0
+        ? {
+            count: data.grandTotal[0].totalCount,
+            total_amount: data.grandTotal[0].totalAmount,
+          }
+        : { count: 0, total_amount: 0 };
+
+    return {
+      customer_info: customerInfo,
+      orders: data.orderList,
+      status_summary: statusSummary,
+      total_summary: totalSummary,
+    };
+  };
 
   // delete order by id
   async deleteOrder(id: string): Promise<void> {
