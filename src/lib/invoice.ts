@@ -6,7 +6,7 @@ class Service {
   private counterName = "invoice_number";
 
   async generateInvoiceNumber(
-    order_id: number | string,
+    order_id: number,
     session: mongoose.mongo.ClientSession
   ): Promise<string> {
     const year = new Date().getFullYear();
