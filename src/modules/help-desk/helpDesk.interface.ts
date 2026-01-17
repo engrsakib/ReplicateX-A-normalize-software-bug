@@ -14,8 +14,9 @@ export interface IPost extends Document {
   attachments?: string[];
   keywords?: Keywords[];
   status?: string;
-  createdBy: string;
-  assignedTo?: string;
+  createdBy: Types.ObjectId;
+  creatorModel: "User" | "Admin";
+  assignedTo?: Types.ObjectId;
   comments?: IComment[];
   is_duplicate?: boolean;
   duplicateOf?: Types.ObjectId;

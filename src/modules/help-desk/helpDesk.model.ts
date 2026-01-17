@@ -62,11 +62,13 @@ const PostSchema = new Schema<IPost>(
       index: true,
     },
     createdBy: {
-      type: String,
+      type: Schema.Types.ObjectId,
+      ref: "creatorModel",
       required: [false, "Creator ID is required"],
     },
     assignedTo: {
-      type: String,
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
       default: null,
     },
     comments: {

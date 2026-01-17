@@ -14,4 +14,10 @@ router.post(
   HelpDeskController.create
 );
 
+router.get(
+  "/",
+  //   JwtInstance.authenticate(Object.values(ROLES)),
+  HelpDeskController.getAll
+);
+
 export const help_desk = router;
