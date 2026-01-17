@@ -1,4 +1,5 @@
 import { Document } from "mongoose";
+import { Keywords, PostType } from "./helpDesk.enum";
 
 interface IComment {
   commenter: string;
@@ -8,11 +9,10 @@ interface IComment {
 
 export interface IPost extends Document {
   title: string;
-  postType: string;
-  batch: string;
+  postType: PostType;
   description: string;
   attachments?: string[];
-  keywords?: string[];
+  keywords: Keywords[];
   status: string;
   createdBy: string;
   assignedTo?: string;
