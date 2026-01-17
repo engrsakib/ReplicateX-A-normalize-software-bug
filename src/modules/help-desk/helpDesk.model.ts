@@ -48,12 +48,12 @@ const PostSchema = new Schema<IPost>(
       enum: Object.values(Keywords),
       validate: {
         validator: function (v: string[]) {
+          if (this.is_duplicate) return true;
+
           return v && v.length >= 4 && v.length <= 9;
         },
         message: "You must provide between 4 and 9 keywords.",
       },
-      required: [true, "At least 4 keywords are required"],
-      index: true,
     },
     status: {
       type: String,
@@ -82,6 +82,11 @@ const PostSchema = new Schema<IPost>(
       ref: "Post",
       default: null,
     },
+    description_embedding: {
+      type: [Number], // ভেক্টর হলো নাম্বারের অ্যারে
+      select: false, // সাধারণ কুয়েরিতে এটা আনার দরকার নেই
+    },
+    ai_summary: { type: String },
   },
   {
     timestamps: true,

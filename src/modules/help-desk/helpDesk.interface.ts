@@ -21,4 +21,6 @@ export interface IPost extends Document {
   duplicateOf?: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
+  description_embedding?: number[];
+  ai_summary?: string;
 }
