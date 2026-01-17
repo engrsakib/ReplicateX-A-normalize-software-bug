@@ -8,17 +8,17 @@ export interface IComment {
 }
 
 export interface IPost extends Document {
-  title: string;
-  postType: PostType;
-  description: string;
+  title?: string;
+  postType?: PostType;
+  description?: string;
   attachments?: string[];
-  keywords: Keywords[];
-  status: string;
+  keywords?: Keywords[];
+  status?: string;
   createdBy: string;
   assignedTo?: string;
   comments?: IComment[];
-  is_duplicate: boolean;
+  is_duplicate?: boolean;
   duplicateOf?: Types.ObjectId;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }

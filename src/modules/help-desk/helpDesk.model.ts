@@ -27,17 +27,17 @@ const PostSchema = new Schema<IPost>(
   {
     title: {
       type: String,
-      required: [true, "Title is required"],
+      required: [false, "Title is required"],
       trim: true,
     },
     postType: {
       type: String,
       enum: Object.values(PostType),
-      required: [true, "Post type is required"],
+      required: [false, "Post type is required"],
     },
     description: {
       type: String,
-      required: [true, "Description is required"],
+      required: [false, "Description is required"],
     },
     attachments: {
       type: [String],
@@ -63,7 +63,7 @@ const PostSchema = new Schema<IPost>(
     },
     createdBy: {
       type: String,
-      required: [true, "Creator ID is required"],
+      required: [false, "Creator ID is required"],
     },
     assignedTo: {
       type: String,
