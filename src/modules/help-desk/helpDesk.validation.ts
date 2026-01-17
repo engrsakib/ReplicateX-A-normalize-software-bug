@@ -59,16 +59,22 @@ const basePostSchemaShape = {
   duplicateOf: z.string().optional().nullable(),
 };
 
-export const createPostValidationSchema = z.object({
+const createPostValidationSchema = z.object({
   body: z.object({
     ...basePostSchemaShape,
   }),
 });
 
-export const updatePostValidationSchema = z.object({
+const updatePostValidationSchema = z.object({
   body: z
     .object({
       ...basePostSchemaShape,
     })
     .partial(),
 });
+
+export const helpDesk_validation = {
+  createPostValidationSchema,
+  updatePostValidationSchema,
+  commentValidationSchema,
+};
