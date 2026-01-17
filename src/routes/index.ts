@@ -6,6 +6,7 @@ import { Router } from "express";
 import { UserRoutes } from "@/modules/user/user.routes";
 import { UploadRoutes } from "@/modules/upload/upload.routes";
 import { PermissionsRoutes } from "@/modules/permission/permission.route";
+import { help_desk } from "@/modules/help-desk/helpDesk.route";
 const router = Router();
 
 const moduleRoutes = [
@@ -25,7 +26,10 @@ const moduleRoutes = [
     path: "/forget-password",
     route: ForgetPasswordRoutes,
   },
-
+  {
+    path: "/help-desk",
+    route: help_desk,
+  },
   {
     path: "/upload",
     route: UploadRoutes,
