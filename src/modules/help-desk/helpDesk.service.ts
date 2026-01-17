@@ -1,6 +1,7 @@
 import { Post } from "./helpDesk.model";
 import { IPost } from "./helpDesk.interface";
 import { Types } from "mongoose";
+import { PostStatus } from "./helpDesk.enum";
 
 class PostServices {
   async createPost(payload: IPost) {
@@ -10,44 +11,66 @@ class PostServices {
       if (payload.title) {
         existingPost = await Post.findOne({ title: payload.title });
       }
-
       if (!existingPost && payload.keywords && payload.keywords.length > 0) {
-        const totalInputKeywords = payload.keywords.length;
+        const inputKeywords = payload.keywords;
+        const inputLength = inputKeywords.length;
 
-        const candidates = await Post.find({
-          keywords: { $in: payload.keywords },
-          is_duplicate: false,
-        }).select("keywords _id");
+        // Aggregation Pipeline
+        const duplicates = await Post.aggregate([
+          {
+            // Stage 1: Match potential candidates (Index Scan)
+            $match: {
+              keywords: { $in: inputKeywords },
+              is_duplicate: false,
+            },
+          },
+          {
+            // Stage 2: Calculate Intersection & Percentage
+            $project: {
+              _id: 1,
 
-        for (const candidate of candidates) {
-          const dbKeywords = candidate.keywords ?? [];
-          const inputKeywords = payload.keywords;
+              intersectionSize: {
+                $size: { $setIntersection: ["$keywords", inputKeywords] },
+              },
+              dbLen: { $size: "$keywords" },
+            },
+          },
+          {
+            // Stage 3: Apply the Formula
+            // Percentage = (Intersection / Min(InputLen, DBLen)) * 100
+            $project: {
+              _id: 1,
+              percentage: {
+                $multiply: [
+                  {
+                    $divide: [
+                      "$intersectionSize",
+                      { $min: ["$dbLen", inputLength] },
+                    ],
+                  },
+                  100,
+                ],
+              },
+            },
+          },
+          {
+            // Stage 4: Filter based on threshold (80%)
 
-          // কমন কিওয়ার্ড বের করা
-          const commonKeywords = dbKeywords.filter((k) =>
-            inputKeywords.includes(k)
-          );
+            $match: {
+              $expr: { $gte: [{ $ceil: "$percentage" }, 80] },
+            },
+          },
+          {
+            // Stage 5: Limit
+            $limit: 1,
+          },
+        ]);
 
-          // এখানে কোনো কমন কিওয়ার্ড না থাকলে হিসাবের দরকার নেই
-          if (commonKeywords.length === 0) continue;
-
-          // --- লজিক আপডেট ---
-          // ইনপুট এবং ডাটাবেস কিওয়ার্ডের মধ্যে যেটির সংখ্যা কম, সেটিকে বেস ধরব
-          const minLength = Math.min(dbKeywords.length, totalInputKeywords);
-
-          // পার্সেন্টেজ হিসাব
-          const rawPercentage = (commonKeywords.length / minLength) * 100;
-          const finalPercentage = Math.ceil(rawPercentage);
-
-          // ৮০% বা তার বেশি হলে ডুপ্লিকেট
-          if (finalPercentage >= 80) {
-            existingPost = candidate as any;
-            break;
-          }
+        if (duplicates.length > 0) {
+          existingPost = duplicates[0] as any;
         }
       }
 
-      // ৩. ডুপ্লিকেট হ্যান্ডলিং
       if (existingPost) {
         const duplicateEntry = await Post.create({
           createdBy: payload.createdBy,
@@ -58,7 +81,7 @@ class PostServices {
           description: null,
           keywords: [],
           postType: null,
-          status: "Duplicate",
+          status: PostStatus.DUPLICATE,
           attachments: [],
         });
 
@@ -69,7 +92,7 @@ class PostServices {
         };
       }
 
-      // ৪. নতুন পোস্ট ক্রিয়েট
+      // ৪. সব ঠিক থাকলে নতুন পোস্ট
       const newPost = await Post.create(payload);
 
       return {
