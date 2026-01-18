@@ -401,6 +401,166 @@ class PostServices {
       data: posts,
     };
   }
+
+  async getPostDetails(id: string) {
+    const pipeline: PipelineStage[] = [
+      // ১. নির্দিষ্ট পোস্টটি খুঁজে বের করা
+      { $match: { _id: new Types.ObjectId(id) } },
+
+      // ২. ডুপ্লিকেট হলে অরিজিনাল পোস্টের তথ্য আনা (Self Lookup)
+      {
+        $lookup: {
+          from: "posts",
+          localField: "duplicateOf",
+          foreignField: "_id",
+          as: "originalPost",
+        },
+      },
+      {
+        $unwind: {
+          path: "$originalPost",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // ৩. ডাটা মার্জিং (যদি বর্তমান পোস্টে ডাটা না থাকে, অরিজিনালটা নিবে)
+      {
+        $addFields: {
+          title: { $ifNull: ["$title", "$originalPost.title"] },
+          description: {
+            $ifNull: ["$description", "$originalPost.description"],
+          },
+          postType: { $ifNull: ["$postType", "$originalPost.postType"] },
+          keywords: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ["$keywords", []] } }, 0] },
+              then: "$keywords",
+              else: "$originalPost.keywords",
+            },
+          },
+          attachments: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ["$attachments", []] } }, 0] },
+              then: "$attachments",
+              else: "$originalPost.attachments",
+            },
+          },
+        },
+      },
+
+      // ৪. CreatedBy পপুলেট করা (User এবং Admin দুটি কালেকশন চেক করবে)
+      {
+        $lookup: {
+          from: "users", // User Collection Name
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "userCreator",
+        },
+      },
+      {
+        $lookup: {
+          from: "admins", // Admin Collection Name
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "adminCreator",
+        },
+      },
+      {
+        $addFields: {
+          createdBy: {
+            // যদি ইউজার অ্যারেতে ডাটা থাকে তবে ইউজার, নাহলে এডমিন
+            $cond: {
+              if: { $gt: [{ $size: "$userCreator" }, 0] },
+              then: { $arrayElemAt: ["$userCreator", 0] },
+              else: { $arrayElemAt: ["$adminCreator", 0] },
+            },
+          },
+        },
+      },
+
+      // ৫. AssignedTo পপুলেট করা (Admin)
+      {
+        $lookup: {
+          from: "admins",
+          localField: "assignedTo",
+          foreignField: "_id",
+          as: "assignedAdmin",
+        },
+      },
+      {
+        $addFields: {
+          assignedTo: { $arrayElemAt: ["$assignedAdmin", 0] },
+        },
+      },
+
+      // ৬. কমেন্টস এর ভেতরের commenter পপুলেট করা
+      // (কমেন্ট অ্যারে আনওয়াইন্ড করে পপুলেট করে আবার গ্রুপ করা হচ্ছে)
+      {
+        $unwind: {
+          path: "$comments",
+          preserveNullAndEmptyArrays: true, // কমেন্ট না থাকলেও পোস্ট দেখাবে
+        },
+      },
+      {
+        $lookup: {
+          from: "users", // ধরে নিচ্ছি কমেন্টার সবসময় User হবে
+          localField: "comments.commenter",
+          foreignField: "_id",
+          as: "comments.commenterDetails",
+        },
+      },
+      {
+        $addFields: {
+          "comments.commenter": {
+            $arrayElemAt: ["$comments.commenterDetails", 0],
+          },
+        },
+      },
+      {
+        // আবার সব কিছুকে গ্রুপ করে আগের অবস্থায় ফিরিয়ে আনা
+        $group: {
+          _id: "$_id",
+          root: { $first: "$$ROOT" }, // পুরো ডকুমেন্ট সেভ রাখা
+          comments: { $push: "$comments" }, // কমেন্টগুলো অ্যারেতে নেওয়া
+        },
+      },
+      {
+        $addFields: {
+          "root.comments": {
+            // যদি কমেন্ট এম্পটি অবজেক্ট হয় (unwind এর কারণে), তবে খালি অ্যারে দিবে
+            $cond: [{ $ifNull: ["$comments.message", false] }, "$comments", []],
+            // নোট: এখানে লজিক সিম্পল রাখার জন্য আমরা ফিল্টার করছি না,
+            // তবে নিচের প্রজেকশনে ক্লিন করা হবে।
+          },
+        },
+      },
+      {
+        $replaceRoot: {
+          newRoot: { $mergeObjects: ["$root", { comments: "$comments" }] },
+        },
+      },
+
+      // ৭. ফাইনাল প্রজেকশন (Clean Output)
+      {
+        $project: {
+          originalPost: 0,
+          userCreator: 0,
+          adminCreator: 0,
+          assignedAdmin: 0,
+          "comments.commenterDetails": 0,
+          description_embedding: 0, // ভেক্টর ডাটা লুকানো হলো
+        },
+      },
+    ];
+
+    const result = await Post.aggregate(pipeline);
+
+    if (!result || result.length === 0) {
+      throw new Error("Post not found");
+    }
+
+    return result[0];
+  }
 }
 
 export const postServices = new PostServices();

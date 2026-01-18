@@ -85,8 +85,8 @@ const PostSchema = new Schema<IPost>(
       default: null,
     },
     description_embedding: {
-      type: [Number], // ভেক্টর হলো নাম্বারের অ্যারে
-      select: false, // সাধারণ কুয়েরিতে এটা আনার দরকার নেই
+      type: [Number],
+      select: false,
     },
     ai_summary: { type: String },
   },
