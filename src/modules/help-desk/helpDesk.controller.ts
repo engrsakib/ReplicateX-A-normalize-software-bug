@@ -55,6 +55,20 @@ class Controller extends BaseController {
       data: result,
     });
   });
+
+  changeStatus = this.catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { status } = req.body; // বডি থেকে স্ট্যাটাস নিবে
+
+    const result = await postServices.changeStatus(id, status);
+
+    this.sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Status updated successfully",
+      data: result,
+    });
+  });
 }
 
 export const HelpDeskController = new Controller();
