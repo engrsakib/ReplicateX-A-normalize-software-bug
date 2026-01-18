@@ -588,6 +588,29 @@ class PostServices {
 
     return result[0];
   }
+
+  async changeStatus(id: string, status: string) {
+    const validStatuses = Object.values(PostStatus) as string[];
+
+    if (!validStatuses.includes(status)) {
+      throw new Error(
+        `Invalid status. Allowed values: ${validStatuses.join(", ")}`
+      );
+    }
+
+    // ২. স্ট্যাটাস আপডেট করা
+    const result = await Post.findByIdAndUpdate(
+      id,
+      { status: status },
+      { new: true, runValidators: true }
+    );
+
+    if (!result) {
+      throw new Error("Post not found");
+    }
+
+    return result;
+  }
 }
 
 export const postServices = new PostServices();
