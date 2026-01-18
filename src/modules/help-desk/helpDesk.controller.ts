@@ -27,6 +27,21 @@ class Controller extends BaseController {
       data: result,
     });
   });
+
+  update = this.catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // সার্ভিস কল করা
+    const result = await postServices.updatePost(id, updateData);
+
+    this.sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: result.success,
+      message: result.message,
+      data: result.data,
+    });
+  });
 }
 
 export const HelpDeskController = new Controller();
