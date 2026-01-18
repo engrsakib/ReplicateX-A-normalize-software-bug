@@ -22,6 +22,12 @@ router.patch(
 );
 
 router.get(
+  "/:id",
+  //   JwtInstance.authenticate(Object.values(ROLES)),
+  HelpDeskController.getSingle
+);
+
+router.get(
   "/",
   JwtInstance.authenticate(Object.values(ROLES)),
   HelpDeskController.getAll

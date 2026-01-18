@@ -42,6 +42,19 @@ class Controller extends BaseController {
       data: result.data,
     });
   });
+
+  getSingle = this.catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const result = await postServices.getPostDetails(id);
+
+    this.sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Post details retrieved successfully",
+      data: result,
+    });
+  });
 }
 
 export const HelpDeskController = new Controller();
