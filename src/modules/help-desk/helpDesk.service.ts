@@ -463,7 +463,7 @@ class PostServices {
         },
       },
 
-      // ৫. টেম্পোরারি 'creator' ফিল্ড তৈরি করা (যাতে প্রজেকশনে ব্যবহার করা যায়)
+      // ৫. টেম্পোরারি 'creator' ফিল্ড তৈরি করা
       {
         $addFields: {
           _tempCreator: {
@@ -476,7 +476,7 @@ class PostServices {
         },
       },
 
-      // ৬. AssignedTo এবং Comments পপুলেশন (আগের মতোই)
+      // ৬. AssignedTo (Admin) পপুলেট
       {
         $lookup: {
           from: "admins",
@@ -485,6 +485,8 @@ class PostServices {
           as: "assignedAdmin",
         },
       },
+
+      // ৭. কমেন্টস পপুলেট করা
       {
         $unwind: { path: "$comments", preserveNullAndEmptyArrays: true },
       },
@@ -523,7 +525,7 @@ class PostServices {
         },
       },
 
-      // ৭. ফাইনাল প্রজেকশন (এখানে createdBy ফরম্যাট করা হয়েছে)
+      // ৮. ফাইনাল প্রজেকশন (এখানেই আপনার ফিক্স করা হয়েছে)
       {
         $project: {
           _id: 1,
@@ -537,40 +539,28 @@ class PostServices {
           updatedAt: 1,
           is_duplicate: 1,
 
-          // createdBy কে সুন্দর অবজেক্ট আকারে সাজানো
+          // --- FIX 1: createdBy ---
           createdBy: {
             _id: "$_tempCreator._id",
-            name: {
-              $concat: [
-                "$_tempCreator.name.firstName",
-                " ",
-                "$_tempCreator.name.lastName",
-              ],
-            }, // নাম জোড়া লাগানো
-            email: "$_tempCreator.email",
-            profileImg: "$_tempCreator.profileImg",
-            role: "$creatorModel", // User নাকি Admin সেটাও দেখাবে
+            name: "$_tempCreator.name", // সরাসরি name ফিল্ড (concat বাদ দেওয়া হয়েছে)
+            email: "$_tempCreator.email", // User মডেলে আছে, Admin এ না থাকলে null আসবে
+            image: "$_tempCreator.image", // profileImg এর বদলে image
+            role: "$creatorModel",
           },
 
-          // assignedTo ফরম্যাট
+          // --- FIX 2: assignedTo ---
           assignedTo: {
             $let: {
               vars: { admin: { $arrayElemAt: ["$assignedAdmin", 0] } },
               in: {
                 _id: "$$admin._id",
-                name: {
-                  $concat: [
-                    "$$admin.name.firstName",
-                    " ",
-                    "$$admin.name.lastName",
-                  ],
-                },
-                email: "$$admin.email",
+                name: "$$admin.name", // সরাসরি name
+                image: "$$admin.image", // সরাসরি image
               },
             },
           },
 
-          // কমেন্টস ফরম্যাট (লুপের ভেতর ক্লিন করা)
+          // --- FIX 3: comments ---
           comments: {
             $map: {
               input: "$comments",
@@ -580,14 +570,8 @@ class PostServices {
                 commentedAt: "$$comment.commentedAt",
                 commenter: {
                   _id: "$$comment.commenter._id",
-                  name: {
-                    $concat: [
-                      "$$comment.commenter.name.firstName",
-                      " ",
-                      "$$comment.commenter.name.lastName",
-                    ],
-                  },
-                  profileImg: "$$comment.commenter.profileImg",
+                  name: "$$comment.commenter.name", // সরাসরি name
+                  image: "$$comment.commenter.image", // সরাসরি image
                 },
               },
             },
