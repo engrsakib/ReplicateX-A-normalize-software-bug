@@ -71,12 +71,12 @@ class Controller extends BaseController {
   });
 
   assignPost = this.catchAsync(async (req: Request, res: Response) => {
-    const { adminId, id } = req.body;
-    if (!adminId) {
-      throw new Error("Admin ID is required in request body");
+    const { adminId, postId } = req.body;
+    if (!adminId || !postId) {
+      throw new Error("Admin ID and Post ID are required in request body");
     }
 
-    const result = await postServices.assignPost(id, adminId);
+    const result = await postServices.assignPost(postId, adminId);
 
     this.sendResponse(res, {
       statusCode: httpStatus.OK,

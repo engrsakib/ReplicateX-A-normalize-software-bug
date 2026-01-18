@@ -15,6 +15,12 @@ router.post(
 );
 
 router.patch(
+  "/assign",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  HelpDeskController.assignPost
+);
+
+router.patch(
   "/:id",
   validateRequest(helpDesk_validation.updatePostValidationSchema),
   JwtInstance.authenticate(Object.values(ROLES)),
