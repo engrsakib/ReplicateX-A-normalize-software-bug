@@ -14,9 +14,16 @@ router.post(
   HelpDeskController.create
 );
 
+router.patch(
+  "/:id",
+  validateRequest(helpDesk_validation.updatePostValidationSchema),
+  JwtInstance.authenticate(Object.values(ROLES)),
+  HelpDeskController.update
+);
+
 router.get(
   "/",
-  //   JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.authenticate(Object.values(ROLES)),
   HelpDeskController.getAll
 );
 
