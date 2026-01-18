@@ -404,10 +404,10 @@ class PostServices {
 
   async getPostDetails(id: string) {
     const pipeline: PipelineStage[] = [
-      // ১. নির্দিষ্ট পোস্টটি খুঁজে বের করা
+      // ১. ম্যাচিং
       { $match: { _id: new Types.ObjectId(id) } },
 
-      // ২. ডুপ্লিকেট হলে অরিজিনাল পোস্টের তথ্য আনা (Self Lookup)
+      // ২. ডুপ্লিকেট হ্যান্ডলিং (Self Lookup)
       {
         $lookup: {
           from: "posts",
@@ -417,13 +417,10 @@ class PostServices {
         },
       },
       {
-        $unwind: {
-          path: "$originalPost",
-          preserveNullAndEmptyArrays: true,
-        },
+        $unwind: { path: "$originalPost", preserveNullAndEmptyArrays: true },
       },
 
-      // ৩. ডাটা মার্জিং (যদি বর্তমান পোস্টে ডাটা না থাকে, অরিজিনালটা নিবে)
+      // ৩. ডাটা মার্জিং
       {
         $addFields: {
           title: { $ifNull: ["$title", "$originalPost.title"] },
@@ -448,10 +445,10 @@ class PostServices {
         },
       },
 
-      // ৪. CreatedBy পপুলেট করা (User এবং Admin দুটি কালেকশন চেক করবে)
+      // ৪. CreatedBy পপুলেট (User & Admin)
       {
         $lookup: {
-          from: "users", // User Collection Name
+          from: "users",
           localField: "createdBy",
           foreignField: "_id",
           as: "userCreator",
@@ -459,16 +456,17 @@ class PostServices {
       },
       {
         $lookup: {
-          from: "admins", // Admin Collection Name
+          from: "admins",
           localField: "createdBy",
           foreignField: "_id",
           as: "adminCreator",
         },
       },
+
+      // ৫. টেম্পোরারি 'creator' ফিল্ড তৈরি করা (যাতে প্রজেকশনে ব্যবহার করা যায়)
       {
         $addFields: {
-          createdBy: {
-            // যদি ইউজার অ্যারেতে ডাটা থাকে তবে ইউজার, নাহলে এডমিন
+          _tempCreator: {
             $cond: {
               if: { $gt: [{ $size: "$userCreator" }, 0] },
               then: { $arrayElemAt: ["$userCreator", 0] },
@@ -478,7 +476,7 @@ class PostServices {
         },
       },
 
-      // ৫. AssignedTo পপুলেট করা (Admin)
+      // ৬. AssignedTo এবং Comments পপুলেশন (আগের মতোই)
       {
         $lookup: {
           from: "admins",
@@ -488,22 +486,11 @@ class PostServices {
         },
       },
       {
-        $addFields: {
-          assignedTo: { $arrayElemAt: ["$assignedAdmin", 0] },
-        },
-      },
-
-      // ৬. কমেন্টস এর ভেতরের commenter পপুলেট করা
-      // (কমেন্ট অ্যারে আনওয়াইন্ড করে পপুলেট করে আবার গ্রুপ করা হচ্ছে)
-      {
-        $unwind: {
-          path: "$comments",
-          preserveNullAndEmptyArrays: true, // কমেন্ট না থাকলেও পোস্ট দেখাবে
-        },
+        $unwind: { path: "$comments", preserveNullAndEmptyArrays: true },
       },
       {
         $lookup: {
-          from: "users", // ধরে নিচ্ছি কমেন্টার সবসময় User হবে
+          from: "users",
           localField: "comments.commenter",
           foreignField: "_id",
           as: "comments.commenterDetails",
@@ -517,20 +504,16 @@ class PostServices {
         },
       },
       {
-        // আবার সব কিছুকে গ্রুপ করে আগের অবস্থায় ফিরিয়ে আনা
         $group: {
           _id: "$_id",
-          root: { $first: "$$ROOT" }, // পুরো ডকুমেন্ট সেভ রাখা
-          comments: { $push: "$comments" }, // কমেন্টগুলো অ্যারেতে নেওয়া
+          root: { $first: "$$ROOT" },
+          comments: { $push: "$comments" },
         },
       },
       {
         $addFields: {
           "root.comments": {
-            // যদি কমেন্ট এম্পটি অবজেক্ট হয় (unwind এর কারণে), তবে খালি অ্যারে দিবে
             $cond: [{ $ifNull: ["$comments.message", false] }, "$comments", []],
-            // নোট: এখানে লজিক সিম্পল রাখার জন্য আমরা ফিল্টার করছি না,
-            // তবে নিচের প্রজেকশনে ক্লিন করা হবে।
           },
         },
       },
@@ -540,15 +523,75 @@ class PostServices {
         },
       },
 
-      // ৭. ফাইনাল প্রজেকশন (Clean Output)
+      // ৭. ফাইনাল প্রজেকশন (এখানে createdBy ফরম্যাট করা হয়েছে)
       {
         $project: {
-          originalPost: 0,
-          userCreator: 0,
-          adminCreator: 0,
-          assignedAdmin: 0,
-          "comments.commenterDetails": 0,
-          description_embedding: 0, // ভেক্টর ডাটা লুকানো হলো
+          _id: 1,
+          title: 1,
+          description: 1,
+          postType: 1,
+          status: 1,
+          keywords: 1,
+          attachments: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          is_duplicate: 1,
+
+          // createdBy কে সুন্দর অবজেক্ট আকারে সাজানো
+          createdBy: {
+            _id: "$_tempCreator._id",
+            name: {
+              $concat: [
+                "$_tempCreator.name.firstName",
+                " ",
+                "$_tempCreator.name.lastName",
+              ],
+            }, // নাম জোড়া লাগানো
+            email: "$_tempCreator.email",
+            profileImg: "$_tempCreator.profileImg",
+            role: "$creatorModel", // User নাকি Admin সেটাও দেখাবে
+          },
+
+          // assignedTo ফরম্যাট
+          assignedTo: {
+            $let: {
+              vars: { admin: { $arrayElemAt: ["$assignedAdmin", 0] } },
+              in: {
+                _id: "$$admin._id",
+                name: {
+                  $concat: [
+                    "$$admin.name.firstName",
+                    " ",
+                    "$$admin.name.lastName",
+                  ],
+                },
+                email: "$$admin.email",
+              },
+            },
+          },
+
+          // কমেন্টস ফরম্যাট (লুপের ভেতর ক্লিন করা)
+          comments: {
+            $map: {
+              input: "$comments",
+              as: "comment",
+              in: {
+                message: "$$comment.message",
+                commentedAt: "$$comment.commentedAt",
+                commenter: {
+                  _id: "$$comment.commenter._id",
+                  name: {
+                    $concat: [
+                      "$$comment.commenter.name.firstName",
+                      " ",
+                      "$$comment.commenter.name.lastName",
+                    ],
+                  },
+                  profileImg: "$$comment.commenter.profileImg",
+                },
+              },
+            },
+          },
         },
       },
     ];
