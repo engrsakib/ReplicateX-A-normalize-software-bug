@@ -640,7 +640,6 @@ class PostServices {
       newStatus = PostStatus.IN_PROGRESS;
     }
 
-    // ৫. আপডেট করা
     const result = await Post.findByIdAndUpdate(
       id,
       {

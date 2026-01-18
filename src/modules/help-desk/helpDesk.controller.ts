@@ -69,6 +69,22 @@ class Controller extends BaseController {
       data: result,
     });
   });
+
+  assignPost = this.catchAsync(async (req: Request, res: Response) => {
+    const { adminId, id } = req.body;
+    if (!adminId) {
+      throw new Error("Admin ID is required in request body");
+    }
+
+    const result = await postServices.assignPost(id, adminId);
+
+    this.sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Post assigned successfully",
+      data: result,
+    });
+  });
 }
 
 export const HelpDeskController = new Controller();
