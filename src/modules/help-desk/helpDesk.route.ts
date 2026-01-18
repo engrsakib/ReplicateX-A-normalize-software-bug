@@ -23,13 +23,13 @@ router.patch(
 
 router.patch(
   "/:id/change-status",
-  //   JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.authenticate(Object.values(ROLES)),
   HelpDeskController.changeStatus
 );
 
 router.get(
   "/:id",
-  //   JwtInstance.authenticate(Object.values(ROLES)),
+  JwtInstance.authenticate(Object.values(ROLES)),
   HelpDeskController.getSingle
 );
 
