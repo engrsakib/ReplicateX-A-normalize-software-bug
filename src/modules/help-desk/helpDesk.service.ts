@@ -2,6 +2,7 @@ import { Post } from "./helpDesk.model";
 import { IPost } from "./helpDesk.interface";
 import { PipelineStage, Types } from "mongoose";
 import { PostStatus } from "./helpDesk.enum";
+import { AdminModel } from "../admin/admin.model";
 
 class PostServices {
   async createPost(payload: IPost) {
@@ -608,6 +609,46 @@ class PostServices {
     if (!result) {
       throw new Error("Post not found");
     }
+
+    return result;
+  }
+
+  async assignPost(id: string, adminId: string) {
+    const adminExists = await AdminModel.findOne({
+      _id: adminId,
+      is_Deleted: false,
+      status: "active",
+    });
+
+    if (!adminExists) {
+      throw new Error("Admin not found or inactive");
+    }
+
+    const post = await Post.findById(id);
+    if (!post) {
+      throw new Error("Post not found");
+    }
+
+    if (post.is_duplicate) {
+      throw new Error(
+        "Cannot assign a duplicate post. Please assign the original post."
+      );
+    }
+
+    let newStatus = post.status;
+    if (post.status === PostStatus.NEW) {
+      newStatus = PostStatus.IN_PROGRESS;
+    }
+
+    // ৫. আপডেট করা
+    const result = await Post.findByIdAndUpdate(
+      id,
+      {
+        assignedTo: adminId,
+        status: newStatus,
+      },
+      { new: true }
+    ).populate("assignedTo", "name email image");
 
     return result;
   }
