@@ -15,15 +15,27 @@ class Controller extends BaseController {
     });
   });
 
+  // getAll = this.catchAsync(async (req: Request, res: Response) => {
+  //   // সার্ভিস কল করা (req.query পাঠাচ্ছি পেজিনেশনের জন্য)
+  //   const result = await postServices.getAllPosts(req.query);
+
+  //   this.sendResponse(res, {
+  //     statusCode: httpStatus.OK,
+  //     success: true,
+  //     message: "Help desk posts retrieved successfully",
+
+  //     data: result,
+  //   });
+  // });
+
   getAll = this.catchAsync(async (req: Request, res: Response) => {
-    // সার্ভিস কল করা (req.query পাঠাচ্ছি পেজিনেশনের জন্য)
+    // req.query এর মধ্যে searchTerm, postType, page, limit সব আছে
     const result = await postServices.getAllPosts(req.query);
 
     this.sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: "Help desk posts retrieved successfully",
-
       data: result,
     });
   });

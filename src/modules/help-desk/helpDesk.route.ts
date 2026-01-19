@@ -41,7 +41,7 @@ router.get(
 
 router.get(
   "/",
-  JwtInstance.authenticate(Object.values(ROLES)),
+  // JwtInstance.authenticate(Object.values(ROLES)),
   HelpDeskController.getAll
 );
 

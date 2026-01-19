@@ -236,16 +236,234 @@ class PostServices {
     }
   }
 
+  // async getAllPosts(query: Record<string, unknown>) {
+  //   const page = Number(query.page) || 1;
+  //   const limit = Number(query.limit) || 10;
+  //   const skip = (page - 1) * limit;
+
+  //   const pipeline: PipelineStage[] = [
+  //     // ১. সর্টিং (নতুন পোস্ট আগে দেখাবে)
+  //     { $sort: { createdAt: -1 } },
+
+  //     // ২. পেজিনেশন এর জন্য Facet ব্যবহার (একই সাথে ডাটা এবং কাউন্ট পাওয়া যাবে)
+  //     {
+  //       $facet: {
+  //         metadata: [{ $count: "total" }],
+  //         data: [
+  //           { $skip: skip },
+  //           { $limit: limit },
+
+  //           // ৩. ডুপ্লিকেট হ্যান্ডলিং (Self Lookup)
+  //           // যদি পোস্টটি ডুপ্লিকেট হয়, তবে অরিজিনাল পোস্টের তথ্য আনব
+  //           {
+  //             $lookup: {
+  //               from: "posts", // কালেকশন নাম (মঙ্গোডিবিতে সাধারণত ছোট হাতের এবং প্লুরাল হয়)
+  //               localField: "duplicateOf",
+  //               foreignField: "_id",
+  //               as: "originalPost",
+  //             },
+  //           },
+  //           {
+  //             $unwind: {
+  //               path: "$originalPost",
+  //               preserveNullAndEmptyArrays: true,
+  //             },
+  //           },
+
+  //           // ৪. ফিল্ড মার্জ করা (Duplicate হলে অরিজিনাল ডাটা নিবে, না হলে নিজের ডাটা)
+  //           {
+  //             $addFields: {
+  //               title: { $ifNull: ["$title", "$originalPost.title"] },
+  //               description: {
+  //                 $ifNull: ["$description", "$originalPost.description"],
+  //               },
+  //               postType: { $ifNull: ["$postType", "$originalPost.postType"] },
+  //               keywords: {
+  //                 $cond: {
+  //                   if: { $gt: [{ $size: { $ifNull: ["$keywords", []] } }, 0] },
+  //                   then: "$keywords",
+  //                   else: "$originalPost.keywords",
+  //                 },
+  //               },
+  //             },
+  //           },
+
+  //           // ৫. ক্রিয়েটর পপুলেট করা (User এবং Admin দুই কালেকশন থেকেই চেক করবে)
+  //           {
+  //             $lookup: {
+  //               from: "users", // আপনার User কালেকশনের নাম
+  //               localField: "createdBy",
+  //               foreignField: "_id",
+  //               as: "userDetails",
+  //             },
+  //           },
+  //           {
+  //             $lookup: {
+  //               from: "admins", // আপনার Admin কালেকশনের নাম (যদি থাকে)
+  //               localField: "createdBy",
+  //               foreignField: "_id",
+  //               as: "adminDetails",
+  //             },
+  //           },
+  //           {
+  //             $addFields: {
+  //               // creatorModel চেক করে সঠিক ডাটা সেট করা
+  //               creator: {
+  //                 $cond: {
+  //                   if: { $eq: ["$creatorModel", "Admin"] },
+  //                   then: { $arrayElemAt: ["$adminDetails", 0] },
+  //                   else: { $arrayElemAt: ["$userDetails", 0] },
+  //                 },
+  //               },
+  //             },
+  //           },
+
+  //           // ৬. ফাইনাল প্রজেকশন (ডাটা ফরম্যাটিং)
+  //           {
+  //             $project: {
+  //               _id: 1,
+  //               title: 1,
+  //               postType: 1,
+  //               status: 1,
+  //               createdAt: 1, // পোস্টের ডেট
+  //               is_duplicate: 1,
+
+  //               // ক্রিয়েটরের প্রয়োজনীয় তথ্য
+  //               creator: {
+  //                 name: {
+  //                   $concat: [
+  //                     "$creator.name.firstName",
+  //                     " ",
+  //                     "$creator.name.lastName",
+  //                   ],
+  //                 }, // নাম জোড়া লাগানো
+  //                 profileImg: "$creator.profileImg", // ইমেজ (screenshot image_f408eb অনুযায়ী)
+  //                 email: "$creator.email",
+  //               },
+
+  //               // কমেন্টস কাউন্ট
+  //               commentsCount: { $size: { $ifNull: ["$comments", []] } },
+
+  //               // ডেসক্রিপশন ২০ শব্দে কেটে নেওয়া (Logic: Split -> Slice -> Reduce)
+  //               shortDescription: {
+  //                 $let: {
+  //                   vars: {
+  //                     words: {
+  //                       $split: [{ $ifNull: ["$description", ""] }, " "],
+  //                     },
+  //                   },
+  //                   in: {
+  //                     $concat: [
+  //                       {
+  //                         $reduce: {
+  //                           input: { $slice: ["$$words", 0, 20] }, // ০ থেকে ২০ শব্দ
+  //                           initialValue: "",
+  //                           in: {
+  //                             $cond: [
+  //                               { $eq: ["$$value", ""] },
+  //                               "$$this",
+  //                               { $concat: ["$$value", " ", "$$this"] },
+  //                             ],
+  //                           },
+  //                         },
+  //                       },
+  //                       // যদি ২০ শব্দের বেশি থাকে তবে "..." যোগ করবে
+  //                       {
+  //                         $cond: [
+  //                           { $gt: [{ $size: "$$words" }, 20] },
+  //                           "...",
+  //                           "",
+  //                         ],
+  //                       },
+  //                     ],
+  //                   },
+  //                 },
+  //               },
+  //             },
+  //           },
+  //         ],
+  //       },
+  //     },
+  //   ];
+
+  //   const result = await Post.aggregate(pipeline);
+
+  //   // মেটাডাটা প্রসেসিং
+  //   const total = result[0].metadata[0]?.total || 0;
+  //   const posts = result[0].data;
+
+  //   return {
+  //     meta: {
+  //       page,
+  //       limit,
+  //       total,
+  //       totalPage: Math.ceil(total / limit),
+  //     },
+  //     data: posts,
+  //   };
+  // }
+
   async getAllPosts(query: Record<string, unknown>) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    // ১. সার্চ এবং ফিল্টার প্যারামিটার নেওয়া
+    const searchTerm = query.searchTerm as string;
+    const postType = query.postType as string;
+
     const pipeline: PipelineStage[] = [
-      // ১. সর্টিং (নতুন পোস্ট আগে দেখাবে)
+      // ২. সর্টিং (নতুন পোস্ট আগে)
       { $sort: { createdAt: -1 } },
 
-      // ২. পেজিনেশন এর জন্য Facet ব্যবহার (একই সাথে ডাটা এবং কাউন্ট পাওয়া যাবে)
+      // ৩. ডুপ্লিকেট হ্যান্ডলিং (আগে ডাটা পপুলেট করতে হবে, নাহলে সার্চ করা যাবে না)
+      {
+        $lookup: {
+          from: "posts",
+          localField: "duplicateOf",
+          foreignField: "_id",
+          as: "originalPost",
+        },
+      },
+      {
+        $unwind: {
+          path: "$originalPost",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // ৪. ডাটা মার্জিং (টাইটেল এবং টাইপ সেট করা)
+      {
+        $addFields: {
+          title: { $ifNull: ["$title", "$originalPost.title"] },
+          description: {
+            $ifNull: ["$description", "$originalPost.description"],
+          },
+          postType: { $ifNull: ["$postType", "$originalPost.postType"] }, // পোস্ট টাইপ ফিল্টারের জন্য জরুরি
+          keywords: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ["$keywords", []] } }, 0] },
+              then: "$keywords",
+              else: "$originalPost.keywords",
+            },
+          },
+        },
+      },
+
+      // ৫. কাস্টম ফিল্টার এবং সার্চ স্টেজ (মার্জ করার পর)
+      {
+        $match: {
+          $and: [
+            // ক. টাইটেল সার্চ (Regex - Case Insensitive)
+            searchTerm ? { title: { $regex: searchTerm, $options: "i" } } : {},
+
+            // খ. পোস্ট টাইপ ফিল্টার (Exact Match)
+            postType ? { postType: postType } : {},
+          ],
+        },
+      },
+
+      // ৬. পেজিনেশন এবং প্রজেকশন (Facet)
       {
         $facet: {
           metadata: [{ $count: "total" }],
@@ -253,45 +471,10 @@ class PostServices {
             { $skip: skip },
             { $limit: limit },
 
-            // ৩. ডুপ্লিকেট হ্যান্ডলিং (Self Lookup)
-            // যদি পোস্টটি ডুপ্লিকেট হয়, তবে অরিজিনাল পোস্টের তথ্য আনব
+            // ক্রিয়েটর পপুলেট করা (User/Admin)
             {
               $lookup: {
-                from: "posts", // কালেকশন নাম (মঙ্গোডিবিতে সাধারণত ছোট হাতের এবং প্লুরাল হয়)
-                localField: "duplicateOf",
-                foreignField: "_id",
-                as: "originalPost",
-              },
-            },
-            {
-              $unwind: {
-                path: "$originalPost",
-                preserveNullAndEmptyArrays: true,
-              },
-            },
-
-            // ৪. ফিল্ড মার্জ করা (Duplicate হলে অরিজিনাল ডাটা নিবে, না হলে নিজের ডাটা)
-            {
-              $addFields: {
-                title: { $ifNull: ["$title", "$originalPost.title"] },
-                description: {
-                  $ifNull: ["$description", "$originalPost.description"],
-                },
-                postType: { $ifNull: ["$postType", "$originalPost.postType"] },
-                keywords: {
-                  $cond: {
-                    if: { $gt: [{ $size: { $ifNull: ["$keywords", []] } }, 0] },
-                    then: "$keywords",
-                    else: "$originalPost.keywords",
-                  },
-                },
-              },
-            },
-
-            // ৫. ক্রিয়েটর পপুলেট করা (User এবং Admin দুই কালেকশন থেকেই চেক করবে)
-            {
-              $lookup: {
-                from: "users", // আপনার User কালেকশনের নাম
+                from: "users",
                 localField: "createdBy",
                 foreignField: "_id",
                 as: "userDetails",
@@ -299,7 +482,7 @@ class PostServices {
             },
             {
               $lookup: {
-                from: "admins", // আপনার Admin কালেকশনের নাম (যদি থাকে)
+                from: "admins",
                 localField: "createdBy",
                 foreignField: "_id",
                 as: "adminDetails",
@@ -307,7 +490,6 @@ class PostServices {
             },
             {
               $addFields: {
-                // creatorModel চেক করে সঠিক ডাটা সেট করা
                 creator: {
                   $cond: {
                     if: { $eq: ["$creatorModel", "Admin"] },
@@ -318,33 +500,24 @@ class PostServices {
               },
             },
 
-            // ৬. ফাইনাল প্রজেকশন (ডাটা ফরম্যাটিং)
+            // ফাইনাল প্রজেকশন
             {
               $project: {
                 _id: 1,
                 title: 1,
                 postType: 1,
                 status: 1,
-                createdAt: 1, // পোস্টের ডেট
+                createdAt: 1,
                 is_duplicate: 1,
 
-                // ক্রিয়েটরের প্রয়োজনীয় তথ্য
                 creator: {
-                  name: {
-                    $concat: [
-                      "$creator.name.firstName",
-                      " ",
-                      "$creator.name.lastName",
-                    ],
-                  }, // নাম জোড়া লাগানো
-                  profileImg: "$creator.profileImg", // ইমেজ (screenshot image_f408eb অনুযায়ী)
+                  name: "$creator.name", // আপনার ফিক্স করা নাম
+                  image: "$creator.image", // আপনার ফিক্স করা ইমেজ
                   email: "$creator.email",
                 },
 
-                // কমেন্টস কাউন্ট
                 commentsCount: { $size: { $ifNull: ["$comments", []] } },
 
-                // ডেসক্রিপশন ২০ শব্দে কেটে নেওয়া (Logic: Split -> Slice -> Reduce)
                 shortDescription: {
                   $let: {
                     vars: {
@@ -356,7 +529,7 @@ class PostServices {
                       $concat: [
                         {
                           $reduce: {
-                            input: { $slice: ["$$words", 0, 20] }, // ০ থেকে ২০ শব্দ
+                            input: { $slice: ["$$words", 0, 20] },
                             initialValue: "",
                             in: {
                               $cond: [
@@ -367,7 +540,6 @@ class PostServices {
                             },
                           },
                         },
-                        // যদি ২০ শব্দের বেশি থাকে তবে "..." যোগ করবে
                         {
                           $cond: [
                             { $gt: [{ $size: "$$words" }, 20] },
@@ -388,7 +560,6 @@ class PostServices {
 
     const result = await Post.aggregate(pipeline);
 
-    // মেটাডাটা প্রসেসিং
     const total = result[0].metadata[0]?.total || 0;
     const posts = result[0].data;
 
