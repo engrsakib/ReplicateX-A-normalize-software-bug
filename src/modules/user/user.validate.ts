@@ -24,6 +24,7 @@ const create = z.object({
       role: z.enum([...USER_ROLES] as [string, ...string[]], {
         required_error: "User role is required",
       }),
+      image: z.string().optional(),
     })
     .strict(),
 });

@@ -10,8 +10,7 @@ class Controller extends BaseController {
     this.sendResponse(res, {
       statusCode: HttpStatusCode.CREATED,
       success: true,
-      message:
-        "Your account has been created successfully. We've sent a verification code (SMS) to you phone number. Please verify to access your account",
+      message: "Your account has been created successfully",
     });
   });
 

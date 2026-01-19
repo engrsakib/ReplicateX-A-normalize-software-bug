@@ -40,7 +40,7 @@ class Service {
         { new: true }
       );
 
-      await OTPService.sendVerificationOtp(data.phone_number, "user");
+      // await OTPService.sendVerificationOtp(data.phone_number, "user");
 
       if (data.role === ROLES.CUSTOMER && updatedUser) {
         if (updatedUser) {
@@ -52,12 +52,11 @@ class Service {
 
       return updatedUser;
     }
-    data.status = USER_STATUS.INACTIVE; // set status to inactive by default
+    data.status = USER_STATUS.ACTIVE; // set status to active by default
     data.password = await BcryptInstance.hash(data.password);
     const result = await UserModel.create(data);
 
-    await OTPService.sendVerificationOtp(data.phone_number, "user");
-
+    // await OTPService.sendVerificationOtp(data.phone_number, "user");
     if (data.role === ROLES.CUSTOMER) {
       emitter.emit("user.registered", result._id);
     }
