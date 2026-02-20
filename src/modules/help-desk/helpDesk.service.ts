@@ -822,6 +822,71 @@ class PostServices {
 
     return result;
   }
+
+  /**
+   * নতুন কমেন্ট তৈরি করা
+   * @param postId - যে পোস্টে কমেন্ট করা হবে
+   * @param commentData - কমেন্টের ডাটা (commenter, message)
+   */
+  async createComment(
+    postId: string,
+    commentData: { commenter: string; message: string }
+  ) {
+    const post = await Post.findById(postId);
+
+    if (!post) {
+      throw new Error("Post not found");
+    }
+
+    // ডুপ্লিকেট পোস্টে সরাসরি কমেন্ট করা নিষেধ হলে এই চেকটি রাখতে পারেন
+    if (post.is_duplicate) {
+      throw new Error(
+        "Cannot comment on a duplicate post. Please comment on the original post."
+      );
+    }
+
+    const result = await Post.findByIdAndUpdate(
+      postId,
+      {
+        $push: {
+          comments: {
+            commenter: new Types.ObjectId(commentData.commenter),
+            message: commentData.message,
+            commentedAt: new Date(),
+          },
+        },
+      },
+      { new: true, runValidators: true }
+    ).populate("comments.commenter", "name email image");
+
+    return result;
+  }
+
+  /**
+   * বিদ্যমান কমেন্ট এডিট করা
+   * @param postId - পোস্ট আইডি
+   * @param commenterId - যে ইউজার কমেন্ট করেছেন (নিরাপত্তার জন্য)
+   * @param newMessage - নতুন মেসেজ
+   */
+  async editComment(postId: string, commenterId: string, newMessage: string) {
+    // পজিশনাল অপারেটর ($) ব্যবহার করে নির্দিষ্ট কমেন্টার এর কমেন্ট আপডেট
+    const result = await Post.findOneAndUpdate(
+      {
+        _id: postId,
+        "comments.commenter": commenterId,
+      },
+      {
+        $set: { "comments.$.message": newMessage },
+      },
+      { new: true, runValidators: true }
+    ).populate("comments.commenter", "name email image");
+
+    if (!result) {
+      throw new Error("Post or Comment not found for this user");
+    }
+
+    return result;
+  }
 }
 
 export const postServices = new PostServices();
