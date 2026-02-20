@@ -43,4 +43,16 @@ router.get(
   HelpDeskController.getAll
 );
 
+router.post(
+  "/:id/comments",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  HelpDeskController.createComment
+);
+
+router.put(
+  "/:postId/comments/:commentId",
+  JwtInstance.authenticate(Object.values(ROLES)),
+  HelpDeskController.editComment
+);
+
 export const help_desk = router;

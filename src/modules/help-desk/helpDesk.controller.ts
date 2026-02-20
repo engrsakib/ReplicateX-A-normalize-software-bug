@@ -97,6 +97,42 @@ class Controller extends BaseController {
       data: result,
     });
   });
+
+  createComment = this.catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { message } = req.body;
+
+    if (!message) {
+      throw new Error("Message is required in request body");
+    }
+
+    const result = await postServices.createComment(id, message);
+
+    this.sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Comment added successfully",
+      data: result,
+    });
+  });
+
+  editComment = this.catchAsync(async (req: Request, res: Response) => {
+    const { id, commentId } = req.params;
+    const { message } = req.body;
+
+    if (!message) {
+      throw new Error("Message is required in request body");
+    }
+
+    const result = await postServices.editComment(id, commentId, message);
+
+    this.sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Comment edited successfully",
+      data: result,
+    });
+  });
 }
 
 export const HelpDeskController = new Controller();
