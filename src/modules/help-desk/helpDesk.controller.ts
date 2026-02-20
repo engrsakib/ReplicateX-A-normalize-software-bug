@@ -100,7 +100,8 @@ class Controller extends BaseController {
 
   createComment = this.catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { message } = req.body;
+    const message = req.body?.message;
+    console.log("Received comment message:", req.body.message);
 
     if (!message) {
       throw new Error("Message is required in request body");

@@ -845,13 +845,15 @@ class PostServices {
       );
     }
 
+    console.log("body", commentData);
+
     const result = await Post.findByIdAndUpdate(
       postId,
       {
         $push: {
           comments: {
             commenter: new Types.ObjectId(commentData.commenter),
-            message: commentData.message,
+            message: commentData,
             commentedAt: new Date(),
           },
         },
