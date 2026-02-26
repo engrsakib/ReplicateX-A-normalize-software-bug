@@ -1,0 +1,13 @@
+
+## License
+This project is licensed under the Apache License 2.0 — see the LICENSE file.
+
+---
+
+Need any of the following next?
+- A ready-to-run `deployments/docker/docker-compose.yml` tuned to your repo (I provided a base above)  
+- A production-ready `Dockerfile` (multi-stage) with best practices (I included examples)  
+- A scaffolded backend `server` layout + sample endpoints for: submit report, check duplicates, list clusters — I can scaffold those files (controllers, services, models) with tests  
+- An embedding microservice example (Python FastAPI) with a ready `app.py` and requirements
+
+Tell me which of the above you'd like me to generate next and I will produce the files.
